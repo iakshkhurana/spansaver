@@ -1,0 +1,214 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+
+@custom-variant dark (&:is(.dark *));
+
+/* SpanSaver phosphor-terminal palette: phosphor green on near-black. The utility class names
+   below keep their original names (neon-cyan etc.) but render green — minimizes churn while
+   giving the green/black hacker look. primary=phosphor green, secondary=soft green,
+   accent=amber (warn), destructive=red (fail). */
+@theme inline {
+  --color-primary: rgb(57 255 20);
+  --color-primary-foreground: rgb(7 10 8);
+  --color-secondary: rgb(0 255 156);
+  --color-secondary-foreground: rgb(7 10 8);
+  --color-accent: rgb(255 180 84);
+  --color-accent-foreground: rgb(7 10 8);
+  --color-background: rgb(7 10 8);
+  --color-foreground: rgb(215 245 215);
+  --color-card: rgb(13 19 13);
+  --color-card-foreground: rgb(215 245 215);
+  --color-muted: rgb(30 42 30);
+  --color-muted-foreground: rgb(110 150 110);
+  --color-border: rgba(57 255 20 / 0.15);
+  --color-input: rgb(13 19 13);
+  --color-ring: rgb(57 255 20);
+  --color-destructive: rgb(255 85 85);
+  --color-destructive-foreground: rgb(255 255 255);
+  --radius: 0.5rem;
+}
+
+:root {
+  color-scheme: dark;
+  --background: rgb(7 10 8);
+  --foreground: rgb(215 245 215);
+  --card: rgb(13 19 13);
+  --card-foreground: rgb(215 245 215);
+  --popover: rgb(13 19 13);
+  --popover-foreground: rgb(215 245 215);
+  --primary: rgb(57 255 20);
+  --primary-foreground: rgb(7 10 8);
+  --secondary: rgb(0 255 156);
+  --secondary-foreground: rgb(7 10 8);
+  --muted: rgb(30 42 30);
+  --muted-foreground: rgb(110 150 110);
+  --accent: rgb(255 180 84);
+  --accent-foreground: rgb(7 10 8);
+  --destructive: rgb(255 85 85);
+  --border: rgba(57 255 20 / 0.15);
+  --input: rgb(13 19 13);
+  --ring: rgb(57 255 20);
+  --chart-1: rgb(57 255 20);
+  --chart-2: rgb(0 255 156);
+  --chart-3: rgb(255 180 84);
+  --chart-4: rgb(92 240 255);
+  --chart-5: rgb(168 85 247);
+  --radius: 0.5rem;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply bg-background;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'JetBrains Mono', 'Space Mono', 'Courier New', monospace;
+    letter-spacing: 0.025em;
+    line-height: 1.65;
+    font-size: 14px;
+  }
+
+  /* CRT Scanlines effect */
+  body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background:
+      repeating-linear-gradient(
+        0deg,
+        rgba(0, 0, 0, 0.08),
+        rgba(0, 0, 0, 0.08) 1px,
+        transparent 1px,
+        transparent 2px
+      );
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  /* Ambient phosphor glow */
+  body::after {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background:
+      radial-gradient(ellipse at 20% 50%, rgba(57, 255, 20, 0.05) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 80%, rgba(0, 255, 156, 0.03) 0%, transparent 50%);
+    pointer-events: none;
+    z-index: 9998;
+  }
+}
+
+@layer utilities {
+  .neon-cyan {
+    @apply text-primary;
+    text-shadow: 0 0 12px rgba(57, 255, 20, 0.6), 0 0 24px rgba(57, 255, 20, 0.3);
+  }
+
+  .neon-green {
+    @apply text-secondary;
+    text-shadow: 0 0 12px rgba(0, 255, 156, 0.6), 0 0 24px rgba(0, 255, 156, 0.3);
+  }
+
+  .neon-orange {
+    @apply text-accent;
+    text-shadow: 0 0 12px rgba(255, 180, 84, 0.6), 0 0 24px rgba(255, 180, 84, 0.3);
+  }
+
+  .glow-cyan {
+    box-shadow: 0 0 20px rgba(57, 255, 20, 0.5), inset 0 0 20px rgba(57, 255, 20, 0.1);
+  }
+
+  .glow-green {
+    box-shadow: 0 0 20px rgba(0, 255, 156, 0.5), inset 0 0 20px rgba(0, 255, 156, 0.1);
+  }
+
+  .cyber-card {
+    @apply bg-card border border-border rounded-lg;
+    background: linear-gradient(135deg, rgba(13, 19, 13, 0.85) 0%, rgba(13, 19, 13, 0.6) 100%);
+    box-shadow: 0 0 30px rgba(57, 255, 20, 0.08), inset 0 0 20px rgba(57, 255, 20, 0.04);
+    border-image: linear-gradient(135deg, rgba(57, 255, 20, 0.3), rgba(0, 255, 156, 0.2)) 1;
+  }
+
+  .glitch {
+    position: relative;
+  }
+
+  .glitch::before,
+  .glitch::after {
+    content: attr(data-text);
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0.8;
+  }
+
+  .glitch::before {
+    animation: glitch-1 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) infinite;
+    color: rgba(57, 255, 20, 0.8);
+    z-index: -1;
+  }
+
+  .glitch::after {
+    animation: glitch-2 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) infinite reverse;
+    color: rgba(0, 255, 156, 0.8);
+    z-index: -2;
+  }
+
+  @keyframes glitch-1 {
+    0% { clip-path: inset(40% 0 61% 0); transform: translate(-2px, -2px); }
+    20% { clip-path: inset(92% 0 1% 0); transform: translate(2px, 2px); }
+    40% { clip-path: inset(43% 0 1% 0); transform: translate(-2px, 2px); }
+    60% { clip-path: inset(25% 0 58% 0); transform: translate(2px, -2px); }
+    80% { clip-path: inset(54% 0 7% 0); transform: translate(-2px, -2px); }
+    100% { clip-path: inset(58% 0 43% 0); transform: translate(2px, 2px); }
+  }
+
+  @keyframes glitch-2 {
+    0% { clip-path: inset(61% 0 40% 0); transform: translate(2px, 2px); }
+    20% { clip-path: inset(1% 0 92% 0); transform: translate(-2px, -2px); }
+    40% { clip-path: inset(1% 0 43% 0); transform: translate(2px, -2px); }
+    60% { clip-path: inset(58% 0 25% 0); transform: translate(-2px, 2px); }
+    80% { clip-path: inset(7% 0 54% 0); transform: translate(2px, 2px); }
+    100% { clip-path: inset(43% 0 58% 0); transform: translate(-2px, -2px); }
+  }
+
+  .pulse-glow {
+    animation: pulse-glow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  @keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 20px rgba(57, 255, 20, 0.3), inset 0 0 20px rgba(57, 255, 20, 0.05); }
+    50% { box-shadow: 0 0 30px rgba(57, 255, 20, 0.6), inset 0 0 30px rgba(57, 255, 20, 0.1); }
+  }
+
+  .blink {
+    animation: blink 1s ease-in-out infinite;
+  }
+
+  @keyframes blink {
+    0%, 49% { opacity: 1; }
+    50%, 100% { opacity: 0.2; }
+  }
+
+  .scan-line {
+    background: repeating-linear-gradient(
+      0deg,
+      rgba(57, 255, 20, 0.03),
+      rgba(57, 255, 20, 0.03) 1px,
+      transparent 1px,
+      transparent 2px
+    );
+  }
+}
