@@ -6,6 +6,9 @@
 
 # generated collector config (built at container start by merge_config.py)
 collector/merged.yaml
+# generated fix patches — staged (fixgen output) and active (promoted on apply); .gitkeep tracked
+collector/patches/*.yaml
+collector/generated/
 
 # python / node noise
 __pycache__/

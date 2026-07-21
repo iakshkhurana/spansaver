@@ -6,3 +6,4 @@ httpx>=0.27,<1.0            # SigNoz REST API client
 clickhouse-driver>=0.2.7,<0.3   # native-protocol ClickHouse access (port 9000)
 python-dotenv>=1.0,<2.0    # host-side .env loading for CLI runs
 PyYAML>=6.0,<7.0           # fixgen reads/writes collector patch YAML
+docker>=7.0,<8.0           # restart the collector container on apply/unapply

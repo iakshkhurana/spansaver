@@ -47,10 +47,19 @@ services:
     build: ./auditor
     profiles: [ "full" ]
     env_file: .env
+    environment:
+      # Reach the host-published SigNoz API from inside the container (localhost would be the
+      # container itself). UI deep-links still use SIGNOZ_UI_URL=localhost for the browser.
+      - SIGNOZ_API_URL=http://host.docker.internal:8080
+      - COLLECTOR_DIR=/workspace/collector   # where fixgen writes patches (shared with collector)
+      - COLLECTOR_CONTAINER=signoz-collector-1  # collector container to restart on apply (docker ps)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports: [ "8100:8100" ]
     volumes:
-      - ./collector:/workspace/collector    # fixgen writes patches here
-    # needs to reach ClickHouse + SigNoz API on the SigNoz network (below)
+      - ./collector:/workspace/collector          # fixgen writes patches here (also mounted by collector)
+      - /var/run/docker.sock:/var/run/docker.sock  # apply/unapply restarts the collector container
+    # reaches ClickHouse + SigNoz API on the external signoz network (below)
 
   ui:
     build: ./ui

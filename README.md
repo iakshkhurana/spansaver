@@ -22,6 +22,14 @@ they're safe to fix, applies the fix, and verifies the savings against live SigN
 Bonus: SpanSaver's own LLM calls are traced into SigNoz — the Agent Ops dashboard discloses
 what each audit cost.
 
+## Status
+**Telemetry auditor (live):** `make audit` runs detectors **T1** (debug-log flood), **T2**
+(orphan metrics), **T3** (health-check span spam) against ClickHouse + the SigNoz API — each
+finding carries a $ projection, a SigNoz deep-link + the raw query, and a "referenced by: none"
+safety proof cross-checked against every dashboard/alert. `make apply F=T1` promotes a validated
+OTel Collector filter patch and reloads the collector (debug volume drops to zero while INFO
+keeps flowing); `make verify F=T1` re-measures + integrity-checks; `make unapply F=T1` reverses it.
+
 ## Quickstart
 See [docs/SETUP.md](docs/SETUP.md). Short version: self-host SigNoz, `cp .env.example .env`,
 `make up && make waste-on && make traffic`, wait 10 minutes, `make audit`, open Mission
