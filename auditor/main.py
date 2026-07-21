@@ -12,6 +12,7 @@ from fastapi import FastAPI, HTTPException
 
 from auditor.config import settings
 from auditor.fixgen.generate import generate_patch
+from auditor.llm_auditor import askdocs_ctl
 from auditor.llm_auditor.detectors import run as run_llm_detectors
 from auditor.llm_auditor.fixgen import generate_fix as generate_llm_fix
 from auditor.telemetry_auditor import collector_ctl
@@ -89,9 +90,13 @@ def _get(finding_id: str) -> Finding:
 @app.post("/apply/{finding_id}")
 def apply(finding_id: str) -> dict:
     f = _get(finding_id)
+    # LLM fixes are a live config flip on askdocs; telemetry fixes promote a collector patch.
     try:
-        result = collector_ctl.apply(f.id)
-    except collector_ctl.CollectorControlError as e:
+        if f.domain == "llm":
+            result = askdocs_ctl.apply(f.id)
+        else:
+            result = collector_ctl.apply(f.id)
+    except (collector_ctl.CollectorControlError, askdocs_ctl.AskdocsControlError) as e:
         raise HTTPException(status_code=502, detail=str(e))
     f.status = Status.APPLIED
     return {"status": f.status.value, **result}
@@ -100,12 +105,16 @@ def apply(finding_id: str) -> dict:
 @app.post("/unapply/{finding_id}")
 def unapply(finding_id: str) -> dict:
     fid = finding_id.upper()
+    f = _FINDINGS.get(fid)
     try:
-        result = collector_ctl.unapply(fid)
-    except collector_ctl.CollectorControlError as e:
+        if f is not None and f.domain == "llm":
+            result = askdocs_ctl.unapply(fid)
+        else:
+            result = collector_ctl.unapply(fid)
+    except (collector_ctl.CollectorControlError, askdocs_ctl.AskdocsControlError) as e:
         raise HTTPException(status_code=502, detail=str(e))
-    if fid in _FINDINGS:
-        _FINDINGS[fid].status = Status.FIX_READY
+    if f is not None:
+        f.status = Status.FIX_READY
     return {"status": "unapplied", **result}
 
 

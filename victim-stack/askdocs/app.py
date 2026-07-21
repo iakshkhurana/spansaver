@@ -61,9 +61,19 @@ FULL_DOCS = "\n\n".join(f"[{k}] {v}" for k, v in DOCS.items())
 
 _cache: dict[str, tuple[str, float]] = {}
 
+# Runtime cache state. Starts from env (WASTE_LLM_NOCACHE forces the uncached "before"); the L1
+# fix flips it live via POST /admin/cache so applying the fix is an instant, reversible config
+# change on the running service — no container rebuild, and the token graph steps down on camera.
+_cache_enabled = ASKDOCS_CACHE and not WASTE_LLM_NOCACHE
+
 
 class AskRequest(BaseModel):
     question: str
+
+
+class CacheToggle(BaseModel):
+    enabled: bool
+    clear: bool = False    # drop cached entries when disabling, so "before" is genuinely cold
 
 
 def _retrieve(question: str) -> str:
@@ -109,8 +119,20 @@ def root():
         "provider": LLM_PROVIDER,
         "model": ASKDOCS_MODEL,
         "waste": {"nocache": WASTE_LLM_NOCACHE, "bloat": WASTE_LLM_BLOAT},
-        "cache_enabled": ASKDOCS_CACHE and not WASTE_LLM_NOCACHE,
+        "cache_enabled": _cache_enabled,
     }
+
+
+@app.post("/admin/cache")
+def admin_cache(toggle: CacheToggle):
+    """Flip the exact-match cache at runtime — this IS applying/unapplying the L1 fix. The
+    auditor calls this on /apply/L1 (enabled=true) and /unapply/L1 (enabled=false, clear=true)."""
+    global _cache_enabled
+    _cache_enabled = toggle.enabled
+    if toggle.clear or not toggle.enabled:
+        _cache.clear()
+    log.info("admin: cache_enabled=%s (cleared=%s)", _cache_enabled, toggle.clear or not toggle.enabled)
+    return {"cache_enabled": _cache_enabled, "entries": len(_cache)}
 
 
 @app.get("/healthz")
@@ -120,8 +142,8 @@ def healthz():
 
 @app.post("/ask")
 def ask(req: AskRequest):
-    # Exact-match cache is the L1 fix; WASTE_LLM_NOCACHE forces the uncached "before" state.
-    cache_on = ASKDOCS_CACHE and not WASTE_LLM_NOCACHE
+    # Exact-match cache is the L1 fix; runtime flag (seeded from env) lets /apply flip it live.
+    cache_on = _cache_enabled
     key = hashlib.sha256(req.question.strip().lower().encode()).hexdigest()
 
     if cache_on and key in _cache:
