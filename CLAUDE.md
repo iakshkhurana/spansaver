@@ -83,3 +83,11 @@ has seen it work once.
 ## Current priorities
 See `docs/PLAN.md`. If unsure what to build next, build the thing the 3-minute demo
 (docs/DEMO-SCRIPT.md) needs and is currently missing.
+
+## Git workflow
+- Work in small, self-contained increments (~15–30 min each). One increment = one commit.
+- NEVER run git commands yourself. After every increment: stop, list the files you changed, give a 2-line summary of what and why, then output ONE ready-to-copy commit message. I commit and push manually.
+- Commit format: Conventional Commits — type(scope): subject. type ∈ feat|fix|docs|chore|refactor|test|perf; scope ∈ collector|orders|payments|askdocs|auditor|ui|docs|scripts|infra. Subject ≤72 chars, imperative, specific — "feat(orders): add OTel auto-instrumentation + WASTE_DEBUG_FLOOD toggle", never "update files". Add a 1–3 line body when the why isn't obvious.
+- Cadence target: 15–20 real commits/day (~85 total by Jul 26). Hit it by keeping increments genuinely small — one service, one detector, one endpoint, one doc at a time. Never propose empty or artificially split commits; granularity must be real.
+- Remind me to git push after every 3–4 commits and at every DoD checkpoint.
+- When a make target or a day's DoD passes, announce it: "DoD CHECK: ..."
