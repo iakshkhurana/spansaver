@@ -136,7 +136,97 @@ def detect_l1(ch: ClickHouse) -> Finding | None:
     return finding
 
 
-DETECTORS = {"L1": detect_l1}
+# ── L2 thresholds ──
+L2_BLOAT_RATIO = _f("L2_BLOAT_RATIO", 8.0)          # flag when p50 input > ratio x p50 output
+L2_MIN_OVERHEAD = _f("L2_MIN_OVERHEAD", 800)        # min shared-overhead tokens worth flagging
+L2_PREFIX_ALLOWANCE = _f("L2_PREFIX_ALLOWANCE", 500)  # a lean prompt is allowed this much context
+L2_MIN_CALLS = _f("L2_MIN_CALLS", 5)                # ignore endpoints with almost no traffic
+
+
+def detect_l2(ch: ClickHouse) -> Finding | None:
+    """L2 · Prompt bloat: a huge static preamble glued to every request regardless of question.
+
+    Every request carries the same shared context, so the MINIMUM observed input tokens is a
+    measured proxy for that fixed overhead (the shortest question still ships the whole preamble).
+    Flag when input dwarfs output (p50_in > ratio x p50_out) and that overhead is large. waste =
+    (min_input - allowance) x request_count — the context that should live behind retrieval.
+    """
+    in_cell = f"{_NUM}['{attrs.INPUT_TOKEN_KEY}']"
+    out_cell = f"{_NUM}['{attrs.OUTPUT_TOKEN_KEY}']"
+    is_llm = f"mapContains({_STR}, '{attrs.PROMPT_KEY}')"
+    window = f"{schema.SPAN_TS} >= now() - INTERVAL {settings.audit_window_hours} HOUR"
+
+    sql = f"""
+        SELECT count()                       AS calls,
+               quantile(0.5)({in_cell})      AS p50_in,
+               quantile(0.95)({in_cell})     AS p95_in,
+               quantile(0.5)({out_cell})     AS p50_out,
+               min({in_cell})                AS min_in
+        FROM {schema.T_TRACES}
+        WHERE {window} AND {schema.SPAN_SERVICE} = '{LLM_SERVICE}' AND {is_llm}
+    """
+    row = ch.query(sql)
+    if not row:
+        return None
+    calls, p50_in, p95_in, p50_out, min_in = row[0]
+    calls = int(calls or 0)
+    p50_in, p95_in, p50_out, min_in = (float(p50_in or 0), float(p95_in or 0),
+                                       float(p50_out or 0), float(min_in or 0))
+    if calls < L2_MIN_CALLS:
+        return None
+    ratio = (p50_in / p50_out) if p50_out else float("inf")
+    overhead = min_in  # the fixed preamble every request pays for
+    if ratio < L2_BLOAT_RATIO or overhead < L2_MIN_OVERHEAD:
+        return None
+
+    bloat_per_req = max(0.0, overhead - L2_PREFIX_ALLOWANCE)
+    wasted_in = bloat_per_req * calls
+
+    finding = Finding(
+        id="L2",
+        domain="llm",
+        title="Prompt bloat",
+        service=LLM_SERVICE,
+        summary=(
+            f"Every request ships ~{int(overhead):,} tokens of shared context "
+            f"(p50 input {int(p50_in):,} vs p50 output {int(p50_out):,} = {ratio:.0f}x); "
+            f"{int(bloat_per_req):,} of them (beyond a {int(L2_PREFIX_ALLOWANCE)}-token allowance) "
+            f"belong behind retrieval, not glued to every prompt."
+        ),
+        measured={
+            "calls": calls,
+            "p50_input_tokens": round(p50_in, 1),
+            "p95_input_tokens": round(p95_in, 1),
+            "p50_output_tokens": round(p50_out, 1),
+            "min_input_tokens": round(min_in, 1),
+            "input_output_ratio": round(ratio, 2) if ratio != float("inf") else None,
+            "shared_overhead_tokens": round(overhead, 1),
+            "prefix_allowance_tokens": int(L2_PREFIX_ALLOWANCE),
+            "bloat_tokens_per_request": round(bloat_per_req, 1),
+            "wasted_input_tokens_window": round(wasted_in),
+            "window_hours": settings.audit_window_hours,
+        },
+        money=money.tokens_monthly(wasted_in, 0),
+    )
+    link = evidence.llm_spans_link(LLM_SERVICE)
+    finding.add_evidence(Evidence(
+        label=f"gen_ai spans for {LLM_SERVICE} (input-token size) in SigNoz Traces Explorer",
+        deeplink=link["url"], filter=link["filter"], raw_query=" ".join(sql.split()),
+    ))
+    # L2 fix = move static context behind retrieval (askdocs already has the RAG path; the wasteful
+    # mode bypasses it). Not a drop of anyone's data, so safety is categorical, not a cross-check.
+    finding.safety = {
+        "safe": True,
+        "proof": ("Fix routes the static preamble through the existing retrieval path instead of "
+                  "gluing the full doc set to every prompt. Answers still draw from the same docs; "
+                  "only the redundant context bytes shrink. No data dropped, fully reversible."),
+        "references": [],
+        "checked": {"shared_overhead_tokens": round(overhead, 1), "allowance": int(L2_PREFIX_ALLOWANCE)},
+    }
+    return finding
+
+
+DETECTORS = {"L1": detect_l1, "L2": detect_l2}
 
 
 def run(ids: list[str] | None = None) -> list[Finding]:
