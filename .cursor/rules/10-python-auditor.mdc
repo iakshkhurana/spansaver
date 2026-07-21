@@ -1,0 +1,52 @@
+---
+description: Conventions for the Python auditor service (detectors, fixgen, verifier)
+globs:
+  - "auditor/**"
+alwaysApply: false
+---
+
+# Auditor (Python) conventions
+
+Stack: Python 3.12, FastAPI, httpx (async), pydantic v2, clickhouse-connect. Lint with ruff.
+
+## The Finding model is the contract
+Everything flows through one pydantic model (define once in `auditor/models.py`):
+
+```python
+class Evidence(BaseModel):
+    label: str            # "42 GB of DEBUG logs in the last 24h"
+    signoz_url: str       # deep link into SigNoz UI — must resolve
+class Finding(BaseModel):
+    id: str               # "T1", "L2" — matches docs/LEAK-CATALOG.md
+    domain: Literal["telemetry", "llm"]
+    title: str
+    monthly_cost_usd: float          # computed, from real volumes × env rates
+    cost_is_estimate: bool = True
+    evidence: list[Evidence]         # ≥1 required
+    safety_proof: str | None         # e.g. "0 dashboards / 0 alerts reference these metrics"
+    fix_ref: str | None              # e.g. "collector/patches/T2-orphan-metrics.yaml"
+    status: Literal["detected", "fix_ready", "applied", "verified", "failed"]
+    verification: dict | None        # before/after numbers
+```
+
+## Detector pattern
+- One module per leak type in `telemetry_auditor/` or `llm_auditor/`, each exposing
+  `async def detect(ctx) -> list[Finding]`. The orchestrator in `main.py` gathers them.
+- ClickHouse: parameterized queries only; introspect table names once at startup and cache
+  them in `ctx`; if a table is missing, return a Finding-less warning, don't crash the run.
+- SigNoz API: confirmed routes live as constants in `signoz_api.py` with a comment noting the
+  SigNoz version they were verified against.
+
+## LLM usage inside the auditor
+- LLM is used for ranking/explanation text and OTTL config drafting — never for the numbers.
+  Volumes, counts, and costs come from queries.
+- temperature=0, request JSON output, validate with pydantic, retry once on parse failure.
+- Log model, input/output tokens per call (we display our own agent cost in the UI).
+
+## Service behavior
+- Endpoints: `GET /findings`, `POST /audit`, `POST /apply/{id}`, `POST /verify/{id}`,
+  `GET /events` (SSE stream of status changes).
+- Never block the event loop; ClickHouse sync calls go through a thread executor.
+- Errors return `{error, hint}` with a concrete next step ("check SIGNOZ_API_KEY", not "failed").
+- No unit-test suite required (hackathon), but each detector gets a `python -m` smoke entry
+  that prints its findings as a table.

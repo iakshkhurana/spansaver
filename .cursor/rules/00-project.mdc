@@ -1,0 +1,36 @@
+---
+description: SpanSaver — project mission, constraints, and non-negotiables (always on)
+alwaysApply: true
+---
+
+# SpanSaver — always-on context
+
+Hackathon project (Agents of SigNoz, deadline July 26, 2026). SpanSaver is an AI auditor that
+finds money leaking in two domains — telemetry ingested into SigNoz that no dashboard/alert
+uses, and LLM token waste mined from gen_ai spans — then generates the fix, applies it, and
+verifies savings with real metrics. Loop: Detect → Prove safety → Fix → Apply → Verify.
+
+Team is 1 human + AI. Judges are 30+ yr US engineers. A working, verified demo beats elegant
+architecture every time.
+
+## Non-negotiables
+- **Introspect, don't guess.** SigNoz API routes, ClickHouse table names, and span attribute
+  keys vary by version. Verify against the live system (SHOW TABLES, DESCRIBE, real API
+  responses, one dumped span) before writing queries. Never invent endpoints or schemas.
+- **No fabricated numbers.** Every figure in the UI comes from a real query. Only pricing
+  rates are assumptions; they live in `.env` and render with an "assumed rate" label.
+- **Findings need evidence.** Each leak finding must include ≥1 working deep-link into the
+  SigNoz UI. No link → not done.
+- **Patches are additive files** in `collector/patches/` with a header comment (finding id +
+  timestamp). Never mutate the baseline collector config at runtime.
+- **Env for everything** — URLs, keys, ports, prices. No hardcoding.
+- **After July 24:** small diffs only, no refactors of working code, no new deps without
+  asking.
+- **Fail loud** with actionable error messages; silent empty states are bugs.
+
+## Spec source of truth
+`docs/LEAK-CATALOG.md` defines every leak type (detection, $ math, fix, safety proof,
+verification). Implement against it; update it if reality forces a change.
+
+## Definition of done
+Runs via a make target, visible in UI or SigNoz, one line in README, human saw it work.

@@ -1,0 +1,41 @@
+---
+description: Conventions for OTel Collector configs, victim-stack services, and SigNoz dashboards
+globs:
+  - "collector/**"
+  - "victim-stack/**"
+  - "dashboards/**"
+alwaysApply: false
+---
+
+# OTel / SigNoz layer conventions
+
+## Victim stack (the demo's raw material)
+- Three services, each with `service.name` set (`orders`, `payments`, `askdocs`) and resource
+  attribute `deployment.environment=hackathon`. OTLP export goes to our collector, never
+  straight to SigNoz — the collector is where fixes get applied, so it must sit in the path.
+- Every waste pattern is a toggle (`WASTE_*` env vars), OFF by default, ON via `make waste-on`.
+  Waste must be *realistic*: DEBUG log lines that look like real app logs, orphan metrics with
+  plausible names (`orders_cache_probe_total`), health checks on `/healthz` every 2s,
+  a cardinality bomb that puts `user_id` into a metric attribute, an uncached LLM endpoint
+  whose system prompt repeats a huge static context. Judges will read this code.
+- askdocs: instrument LLM calls with Traceloop/OpenLLMetry at startup; confirm token usage
+  attributes are present on real spans before building anything on top of them.
+
+## Collector configs
+- `otel-collector.baseline.yaml` = receivers (OTLP + a Prometheus scrape of node_exporter to
+  show the migration story), minimal processors (batch, resource), SigNoz exporter.
+- Generated fixes are separate files in `collector/patches/`, named `<FindingID>-<slug>.yaml`,
+  each starting with a header comment: finding id, generated-at timestamp, one-line rationale,
+  and the safety proof. Runtime config = baseline merged with applied patches; the merge/
+  reload mechanism lives in `auditor/fixgen/` and must be reversible (unapply = remove file +
+  reload).
+- Use the filter processor (OTTL) for drops. **Cardinality (T4) is special:** dropping metric
+  attributes alone does NOT reduce series count or cost — aggregate with the metrics transform
+  processor or drop the whole metric. docs/LEAK-CATALOG.md#T4 explains; follow it.
+- After any collector config change, validate before reload (`--dry-run` style check or config
+  validation) — a broken collector mid-demo is a catastrophic failure mode.
+
+## Dashboards
+- Anything we want judges to see lives as importable JSON in `dashboards/` (leak overview,
+  Agent Ops with our own token spend, before/after ingestion). Keep names prefixed `SpanSaver —`
+  so they're findable fast during judging.

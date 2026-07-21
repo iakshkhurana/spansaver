@@ -1,0 +1,36 @@
+---
+description: Conventions for Mission Control (Next.js UI)
+globs:
+  - "ui/**"
+alwaysApply: false
+---
+
+# Mission Control (UI) conventions
+
+Stack: Next.js (App Router) + TypeScript + Tailwind + shadcn/ui. Package manager: pnpm.
+
+## Pages
+- `/` — Leak Report: total $/month leaking (big ticker), findings grouped by domain
+  (Telemetry | LLM), each as a LeakCard.
+- `/leak/[id]` — detail: evidence links, safety proof, generated fix (syntax-highlighted YAML
+  or diff), Apply button, verification panel with before/after sparkline.
+- `/judge` — Judge Mode: the 6 judging criteria, each mapped to one live link + one sentence.
+  Mirrors docs/JUDGING-MAP.md. Cheap page, disproportionate scoring value — keep it current.
+
+## Hard rules
+- Data comes from the auditor API + SSE (`/events`). **No mock data** on the main path after
+  Day 3; mocks only behind `?demo=mock`, and never in the demo video.
+- Every LeakCard renders: $ / month (with "assumed rate" tooltip when `cost_is_estimate`),
+  ≥1 evidence deep-link that opens SigNoz in a new tab, status chip
+  (detected → fix ready → applied → verified), and the safety proof line when present.
+- The verified state is the money shot: green banner —
+  "Verified: N dashboards and M alerts intact · ingestion −X%". Make it unmissable.
+- Loading/error states everywhere; an error must show the `hint` from the API.
+
+## Look & feel
+- Dark ops-room theme. Define tokens once in globals (background near-black, one accent for
+  money/savings, one for danger/leaks, green strictly reserved for "verified").
+- Monospace for numbers, YAML, and IDs. Tabular figures for the ticker so digits don't jump.
+- Motion: subtle only — ticker count-up and status-chip transitions. Nothing bouncy;
+  the audience is 30+ yr engineers, credibility over flash.
+- Responsive enough for a 1080p projector at 125% zoom (judges' screen), not mobile-first.
