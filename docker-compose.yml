@@ -1,6 +1,9 @@
 # SpanSaver stack — SigNoz itself runs from its own official compose, separately.
-# We JOIN its docker network so the auditor can reach ClickHouse + the SigNoz API by name.
-# D1 TODO: confirm the network name (`docker network ls`) and set SIGNOZ_DOCKER_NETWORK in .env.
+# We JOIN its docker network so our collector reaches SigNoz ingest, and (D2) the auditor
+# reaches ClickHouse + the SigNoz API by service name.
+# BEFORE `make up`: confirm the network name (`docker network ls`) and set
+# SIGNOZ_DOCKER_NETWORK in .env. D1 `make up` starts collector + orders + payments + askdocs;
+# auditor + ui are behind the "full" profile (D2/D3).
 
 services:
   collector:
@@ -36,8 +39,12 @@ services:
     ports: [ "8003:8000" ]
     depends_on: [ collector ]
 
+  # auditor + ui land in D2/D3. They're behind the "full" profile so D1 `make up` builds
+  # only what exists (collector + victims). Bring them up later with:
+  #   docker compose --profile full up -d --build
   auditor:
     build: ./auditor
+    profiles: [ "full" ]
     env_file: .env
     ports: [ "8100:8100" ]
     volumes:
@@ -46,6 +53,7 @@ services:
 
   ui:
     build: ./ui
+    profiles: [ "full" ]
     env_file: .env
     ports: [ "3000:3000" ]
     depends_on: [ auditor ]
