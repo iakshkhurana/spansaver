@@ -1,50 +1,61 @@
 """Pinned gen_ai span attribute keys for askdocs (Traceloop / OpenLLMetry).
 
-⚠️ UNVERIFIED STUB — the exact keys depend on the installed OpenLLMetry version. Golden
-rule #1 (introspect, don't guess): dump ONE real askdocs span and confirm which keys are
-present, then NARROW each candidate list below to the single key you observed and drop this
-warning. Until then the resolver tries every known candidate in order.
+VERIFIED against a real askdocs span (2026-07-21, provider=openai, model=gpt-4o-mini),
+dumped from the collector debug exporter. The first key in each list below is the one this
+stack actually emits; the rest are kept as fallbacks in case the OpenLLMetry version drifts.
 
-To dump a span's attributes once the stack is running, pipe its attributes JSON in:
+Observed on the real span:
+    gen_ai.provider.name       = openai
+    gen_ai.operation.name      = chat
+    gen_ai.request.model       = gpt-4o-mini
+    gen_ai.response.model      = gpt-4o-mini-2024-07-18
+    gen_ai.usage.input_tokens  = 54
+    gen_ai.usage.output_tokens = 11
+    gen_ai.usage.total_tokens  = 65
+    gen_ai.usage.cache_read.input_tokens = 0
+    gen_ai.input.messages / gen_ai.output.messages  (JSON arrays)
+
+To re-verify after any dependency bump, pipe a span's attributes JSON in:
 
     python -m auditor.llm_auditor.attrs < one_span_attributes.json
-
-(Get that JSON from the collector `debug` exporter output, the SigNoz trace view's raw
-span, or a ClickHouse `signoz_traces` query — whichever is handy.)
 """
 from __future__ import annotations
 
 import json
 import sys
 
-# Candidate keys, most-current OTel gen_ai semconv first, then legacy OpenLLMetry/Traceloop.
-# NARROW each list to the one confirmed key after dumping a real span.
+# First entry = confirmed key on this stack; rest = cross-version fallbacks.
 MODEL_KEYS = [
-    "gen_ai.response.model",
-    "gen_ai.request.model",
+    "gen_ai.response.model",         # confirmed (exact model incl. dated suffix)
+    "gen_ai.request.model",          # confirmed (requested alias)
     "llm.request.model",
 ]
 INPUT_TOKEN_KEYS = [
-    "gen_ai.usage.input_tokens",     # current OTel semconv
+    "gen_ai.usage.input_tokens",     # confirmed
     "gen_ai.usage.prompt_tokens",    # earlier OpenLLMetry
     "llm.usage.prompt_tokens",       # legacy Traceloop
 ]
 OUTPUT_TOKEN_KEYS = [
-    "gen_ai.usage.output_tokens",
+    "gen_ai.usage.output_tokens",    # confirmed
     "gen_ai.usage.completion_tokens",
     "llm.usage.completion_tokens",
 ]
 TOTAL_TOKEN_KEYS = [
-    "gen_ai.usage.total_tokens",
+    "gen_ai.usage.total_tokens",     # confirmed
     "llm.usage.total_tokens",
 ]
-SYSTEM_KEYS = [
-    "gen_ai.system",                 # e.g. "anthropic" / "openai"
+# Cached input tokens (0 when cache off) — relevant to the L1 cacheable-duplicates detector.
+CACHE_READ_TOKEN_KEYS = [
+    "gen_ai.usage.cache_read.input_tokens",  # confirmed
 ]
-# Prompt/completion content is indexed (…prompt.0.content, …completion.0.role). We match by
-# prefix rather than exact key.
-PROMPT_PREFIXES = ["gen_ai.prompt.", "llm.prompts."]
-COMPLETION_PREFIXES = ["gen_ai.completion.", "llm.completions."]
+SYSTEM_KEYS = [
+    "gen_ai.provider.name",          # confirmed ("openai")
+    "gen_ai.system",                 # older semconv fallback
+]
+# This OpenLLMetry version emits prompts/completions as JSON arrays under single keys, not
+# indexed (…prompt.0.content). Match the confirmed keys first, then the older indexed prefixes.
+PROMPT_PREFIXES = ["gen_ai.input.messages", "gen_ai.prompt.", "llm.prompts."]
+COMPLETION_PREFIXES = ["gen_ai.output.messages", "gen_ai.completion.", "llm.completions."]
 
 
 def _first(attrs: dict, keys: list[str]):
@@ -66,6 +77,7 @@ def resolve_usage(attrs: dict) -> dict:
     out_key, output_tokens = _first(attrs, OUTPUT_TOKEN_KEYS)
     total_key, total_tokens = _first(attrs, TOTAL_TOKEN_KEYS)
     sys_key, system = _first(attrs, SYSTEM_KEYS)
+    cache_key, cache_read_tokens = _first(attrs, CACHE_READ_TOKEN_KEYS)
 
     if total_tokens is None and input_tokens is not None and output_tokens is not None:
         total_tokens = int(input_tokens) + int(output_tokens)
@@ -77,12 +89,14 @@ def resolve_usage(attrs: dict) -> dict:
         "input_tokens": input_tokens,
         "output_tokens": output_tokens,
         "total_tokens": total_tokens,
+        "cache_read_tokens": cache_read_tokens,
         "_source_keys": {
             "system": sys_key,
             "model": model_key,
             "input_tokens": in_key,
             "output_tokens": out_key,
             "total_tokens": total_key,
+            "cache_read_tokens": cache_key,
         },
     }
 

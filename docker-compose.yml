@@ -9,6 +9,8 @@ services:
   collector:
     build: ./collector                      # otelcol-contrib + entrypoint that merges patches
     env_file: .env                          # provides SIGNOZ_COLLECTOR_OTLP_ENDPOINT
+    extra_hosts:
+      - "host.docker.internal:host-gateway" # reach SigNoz's host-published OTLP port
     command: ["--config=/etc/otelcol/merged.yaml"]
     volumes:
       - ./collector:/etc/otelcol            # baseline + merge_config.py + patches/ + merged.yaml

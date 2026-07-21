@@ -36,13 +36,12 @@ processors:
         action: upsert
 
 exporters:
-  # Onward to SigNoz's own ingest (its bundled OTel collector) on the shared docker
-  # network. CONFIRM the service name + port against the live SigNoz compose
-  # (`docker ps`); set SIGNOZ_COLLECTOR_OTLP_ENDPOINT in .env (host:port, no scheme).
-  otlp/signoz:
+  # Onward to SigNoz's own ingest via OTLP HTTP (4318). We use HTTP not gRPC because the
+  # host-loopback path to SigNoz's published port trips gRPC's h2c handshake ("server
+  # preface EOF"); HTTP is robust over it. Set SIGNOZ_COLLECTOR_OTLP_ENDPOINT in .env as a
+  # full URL, e.g. http://host.docker.internal:4318.
+  otlphttp/signoz:
     endpoint: ${env:SIGNOZ_COLLECTOR_OTLP_ENDPOINT}
-    tls:
-      insecure: true
   # Kept on the pipelines during bring-up so we can see data flow in `make logs`.
   debug:
     verbosity: normal
@@ -55,12 +54,12 @@ service:
     traces:
       receivers: [otlp]
       processors: [memory_limiter, resource, batch]
-      exporters: [otlp/signoz, debug]
+      exporters: [otlphttp/signoz, debug]
     metrics:
       receivers: [otlp, prometheus]
       processors: [memory_limiter, resource, batch]
-      exporters: [otlp/signoz]
+      exporters: [otlphttp/signoz]
     logs:
       receivers: [otlp]
       processors: [memory_limiter, resource, batch]
-      exporters: [otlp/signoz]
+      exporters: [otlphttp/signoz]
