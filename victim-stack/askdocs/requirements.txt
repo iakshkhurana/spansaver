@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+pydantic
+traceloop-sdk
+openai
+anthropic
+opentelemetry-exporter-otlp
+opentelemetry-instrumentation-fastapi

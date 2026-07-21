@@ -33,6 +33,7 @@ services:
     build: ./victim-stack/askdocs
     env_file: .env
     environment: [ OTEL_SERVICE_NAME=askdocs ]
+    ports: [ "8003:8000" ]
     depends_on: [ collector ]
 
   auditor:
