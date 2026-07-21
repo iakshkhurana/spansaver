@@ -12,6 +12,8 @@ from fastapi import FastAPI, HTTPException
 
 from auditor.config import settings
 from auditor.fixgen.generate import generate_patch
+from auditor.llm_auditor.detectors import run as run_llm_detectors
+from auditor.llm_auditor.fixgen import generate_fix as generate_llm_fix
 from auditor.telemetry_auditor import collector_ctl
 from auditor.telemetry_auditor.clickhouse import ClickHouse, ClickHouseUnavailable
 from auditor.telemetry_auditor.detectors import run as run_detectors
@@ -46,21 +48,31 @@ def health() -> dict:
             "applied_patches": collector_ctl.list_applied()}
 
 
+def _generate_fix(f: Finding) -> None:
+    """detected -> fix_ready. Telemetry findings get a collector patch; LLM findings get a
+    config diff (their fix is an env flip, not a collector YAML). Either way, a failure here
+    downgrades to DETECTED with a loud reason rather than dropping the finding."""
+    try:
+        if f.domain == "llm":
+            generate_llm_fix(f)      # writes collector/generated/<id>.diff, sets finding.fix
+        else:
+            generate_patch(f)        # writes collector/generated/<id>.yaml
+    except Exception as e:  # noqa: BLE001 - a fixgen failure shouldn't drop the finding
+        f.status = Status.DETECTED
+        f.error = f"fixgen failed: {e}"
+
+
 @app.post("/audit")
 def audit() -> dict:
-    """Run telemetry detectors, generate a patch per finding, return the findings."""
+    """Run telemetry + LLM detectors, generate a fix per finding, return the findings."""
     try:
-        findings = run_detectors()
+        findings = run_detectors() + run_llm_detectors()
     except ClickHouseUnavailable as e:
         raise HTTPException(status_code=503, detail=str(e))
     _FINDINGS.clear()
     out = []
     for f in findings:
-        try:
-            generate_patch(f)  # detected -> fix_ready, writes collector/patches/<id>.yaml
-        except Exception as e:  # noqa: BLE001 - a patch failure shouldn't drop the finding
-            f.status = Status.DETECTED
-            f.error = f"fixgen failed: {e}"
+        _generate_fix(f)
         _FINDINGS[f.id] = f
         out.append(f.to_dict())
     return {"count": len(out), "findings": out}

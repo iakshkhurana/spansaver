@@ -44,7 +44,9 @@ class Finding:
     evidence: list = field(default_factory=list)   # list[Evidence]
     safety: dict = field(default_factory=dict)     # {proof: str, references: [...], safe: bool}
 
-    patch_path: str = ""          # set by fixgen (collector/patches/*.yaml)
+    patch_path: str = ""          # set by fixgen (collector/patches/*.yaml) for collector patches
+    fix: dict = field(default_factory=dict)  # non-collector fixes (e.g. L1 config diff): {kind,
+    #                                          diff, apply, note, path} — UI renders the diff
     verification: dict = field(default_factory=dict)  # before/after, set by verifier
     error: str = ""               # populated iff status == FAILED
 
