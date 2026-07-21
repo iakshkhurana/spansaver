@@ -1,6 +1,9 @@
 # secrets / local config
 .env
 
+# SigNoz self-host clone (runs separately; not part of our repo)
+/signoz/
+
 # generated collector config (built at container start by merge_config.py)
 collector/merged.yaml
 

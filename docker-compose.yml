@@ -12,9 +12,8 @@ services:
     command: ["--config=/etc/otelcol/merged.yaml"]
     volumes:
       - ./collector:/etc/otelcol            # baseline + merge_config.py + patches/ + merged.yaml
-    ports:
-      - "4317:4317"   # OTLP gRPC
-      - "4318:4318"   # OTLP HTTP
+    # No host ports: victims reach us as `collector:4317` inside the shared network, and
+    # SigNoz already publishes host 4317/4318 — publishing them here would clash.
     # entrypoint.sh runs merge_config.py on start (baseline + patches/*.yaml -> merged.yaml).
     # D2: auditor triggers re-merge + collector restart on apply/unapply.
 

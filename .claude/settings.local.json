@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(docker network *)",
+      "Bash(echo \"---exit:$?---\")",
+      "Bash(python merge_config.py)",
+      "Bash(python -c \"import yaml; d=yaml.safe_load\\(open\\('merged.yaml'\\)\\); print\\('pipelines:', list\\(d['service']['pipelines'].keys\\(\\)\\)\\); print\\('exporters:', list\\(d['exporters'].keys\\(\\)\\)\\)\")",
+      "Bash(python -m py_compile victim-stack/orders/app.py)",
+      "Bash(python -m py_compile victim-stack/payments/app.py)",
+      "Bash(python -m py_compile victim-stack/askdocs/app.py)",
+      "Bash(python -m auditor.llm_auditor.attrs)",
+      "Bash(echo \"exit:$?\")",
+      "Bash(python -m py_compile scripts/traffic.py)",
+      "Bash(bash -n scripts/toggle_waste.sh)",
+      "Bash(python -c \"import yaml; c=yaml.safe_load\\(open\\('docker-compose.yml'\\)\\); s=c['services']; print\\('services:', list\\(s.keys\\(\\)\\)\\); print\\('D1 \\(no profile\\):', [k for k,v in s.items\\(\\) if 'profiles' not in v]\\); print\\('full profile:', [k for k,v in s.items\\(\\) if 'profiles' in v]\\); print\\('network:', c['networks']['default']\\)\")",
+      "Bash(curl -s \"https://hub.docker.com/v2/repositories/otel/opentelemetry-collector-contrib/tags?page_size=25&ordering=last_updated\")",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('\\\\n'.join\\(t['name'] for t in d['results']\\)\\)\")",
+      "WebFetch(domain:signoz.io)"
+    ]
+  }
+}
