@@ -8,7 +8,10 @@ look them up. Everything fails loud with an actionable message (golden rule #7).
 """
 from __future__ import annotations
 
+import os
+
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 
 from auditor.config import settings
 from auditor.fixgen.generate import generate_patch
@@ -23,6 +26,16 @@ from auditor.telemetry_auditor.signoz_api import SigNozAPI, SigNozAPIError
 from auditor.verifier.verify import verify as verify_finding
 
 app = FastAPI(title="SpanSaver auditor", version="0.2.0")
+
+# The Mission Control UI (Next.js, default :3000) calls this API cross-origin from the browser.
+# Allow its origin(s); UI_ORIGINS is comma-separated, "*" for any (fine for the local demo).
+_origins = [o.strip() for o in os.getenv("UI_ORIGINS", "*").split(",") if o.strip()]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_origins,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Last audit's findings, keyed by id (e.g. "T1"). In-memory is fine for the demo.
 _FINDINGS: dict[str, Finding] = {}
@@ -79,12 +92,24 @@ def audit() -> dict:
     return {"count": len(out), "findings": out}
 
 
+@app.get("/findings")
+def list_findings() -> dict:
+    """Last audit's findings, no re-run — lets the UI reload/poll without re-detecting."""
+    return {"count": len(_FINDINGS), "findings": [f.to_dict() for f in _FINDINGS.values()]}
+
+
 def _get(finding_id: str) -> Finding:
     f = _FINDINGS.get(finding_id.upper())
     if f is None:
         raise HTTPException(status_code=404,
                             detail=f"{finding_id} not found — run POST /audit first")
     return f
+
+
+@app.get("/findings/{finding_id}")
+def get_finding(finding_id: str) -> dict:
+    """A single finding by id (e.g. for the UI leak-detail page on hard refresh)."""
+    return _get(finding_id).to_dict()
 
 
 @app.post("/apply/{finding_id}")
