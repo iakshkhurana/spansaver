@@ -89,6 +89,28 @@ make unapply F=T1    # reverse it — fully reversible
 > **Proof it works:** applying **T1** drops `orders` DEBUG logs **142 → 0** in SigNoz while INFO
 > keeps flowing. The waste stops; nothing you rely on breaks.
 
+**LLM auditor — mined from `askdocs` gen_ai spans (Traceloop/OpenLLMetry).** Same lifecycle,
+different domain; the fix is a live config flip on the running service, not a collector patch.
+
+| ID | Leak | Signal detected | Generated fix |
+|----|------|-----------------|---------------|
+| **L1** | Cacheable duplicate prompts | same prompt answered fresh ≥5× — waste = `(count−1) × avg tokens` | flip askdocs to an exact-match, TTL-bounded cache (no wrong-answer risk) |
+| **L2** | Prompt bloat | p50 input ≫ p50 output + large shared preamble | move static context behind retrieval (`WASTE_LLM_BLOAT=0`) |
+
+```bash
+make audit           # now also returns L1–L2 with token-$ math, deep-link, safety proof
+make apply   F=L1    # flips askdocs' cache on live — token graph steps down immediately
+make verify  F=L1    # re-measures gen_ai calls/tokens + cacheable repeats -> ~0
+```
+
+**Mission Control (Next.js) — phosphor-terminal UI.** Run an audit, inspect any leak's money math,
+safety proof, fix diff, and SigNoz evidence deep-link, then apply → verify → unapply — from the
+report page, or from the built-in command console. `make ui` (config in `ui/.env.example`).
+
+**Agent Ops dashboard** — `dashboards/agent-ops.json`: LLM tokens/calls, prompt-size p50/p95,
+cache reads, and cacheable duplicates, all from real gen_ai spans. Import via the SigNoz UI
+(see `dashboards/README.md`).
+
 ---
 
 ## Architecture
@@ -105,7 +127,7 @@ make unapply F=T1    # reverse it — fully reversible
                                 └───────────────────│   auditor   │
                                                     │  (FastAPI)  │
                                                     └─────┬───────┘
-                                          Findings (SSE)  │
+                                        Findings (REST)  │
                                                     ┌─────▼───────┐
                                                     │Mission Ctrl │
                                                     │  (Next.js)  │
@@ -141,9 +163,10 @@ the UI. Every other number is measured.
 |---|--------|--------|
 | **T1–T3** | Telemetry: debug flood, orphan metrics, health-span spam | ✅ live (detect → apply → verify) |
 | **T4** | Telemetry: cardinality bomb (aggregate-away, not label-drop) | 🔜 |
-| **L1–L2** | LLM: cacheable duplicates, prompt bloat | 🔜 |
+| **L1–L2** | LLM: cacheable duplicates, prompt bloat | ✅ live (detect → apply → verify) |
 | **L3–L4** | LLM: retry storms, model overkill (recommend-only) | 🗺️ catalogued |
-| **Mission Control** | Report · leak detail · SSE status · Judge Mode | 🔜 |
+| **Mission Control** | Report · leak detail · live status · command console · Judge Mode | ✅ live |
+| **Agent Ops dashboard** | LLM tokens/calls/prompt-size/duplicates in SigNoz | ✅ importable |
 
 See **[docs/LEAK-CATALOG.md](docs/LEAK-CATALOG.md)** for the full spec.
 

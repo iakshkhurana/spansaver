@@ -1,0 +1,154 @@
+{
+  "title": "SpanSaver · Agent Ops",
+  "description": "LLM/agent observability for askdocs, mined from gen_ai spans (Traceloop/OpenLLMetry). Tokens, calls, prompt-size distribution, cacheable duplicates, cache reads, and cost drivers — the same signals the L1/L2 detectors act on. Queries use the CONFIRMED signoz_index_v3 columns and pinned gen_ai attribute keys (auditor/telemetry_auditor/schema.py + auditor/llm_auditor/attrs.py). Time-filter tokens follow SigNoz clickhouse-query templating; if this build rejects the import, rebuild panels from dashboards/README.md (same queries).",
+  "tags": ["spansaver", "llm", "agent-ops", "gen_ai"],
+  "layout": [
+    { "i": "tokens_over_time", "x": 0, "y": 0, "w": 6, "h": 6 },
+    { "i": "llm_calls", "x": 6, "y": 0, "w": 6, "h": 6 },
+    { "i": "input_token_quantiles", "x": 0, "y": 6, "w": 6, "h": 6 },
+    { "i": "cache_read_tokens", "x": 6, "y": 6, "w": 6, "h": 6 },
+    { "i": "total_tokens", "x": 0, "y": 12, "w": 4, "h": 6 },
+    { "i": "calls_by_model", "x": 4, "y": 12, "w": 8, "h": 6 },
+    { "i": "cacheable_duplicates", "x": 0, "y": 18, "w": 12, "h": 6 }
+  ],
+  "widgets": [
+    {
+      "id": "tokens_over_time",
+      "title": "LLM tokens over time — askdocs",
+      "description": "Input vs output tokens per interval. The L1 fix steps this down (repeats served from cache emit no span).",
+      "panelTypes": "graph",
+      "timePreferance": "GLOBAL_TIME",
+      "nullZeroValues": "zero",
+      "opacity": "1",
+      "yAxisUnit": "short",
+      "query": {
+        "queryType": "clickhouse_sql",
+        "clickhouse_sql": [
+          { "name": "A", "legend": "input tokens", "disabled": false,
+            "query": "SELECT toStartOfInterval(timestamp, INTERVAL {{.step_interval}} SECOND) AS ts, sum(attributes_number['gen_ai.usage.input_tokens']) AS value FROM signoz_traces.distributed_signoz_index_v3 WHERE serviceName = 'askdocs' AND mapContains(attributes_string, 'gen_ai.input.messages') AND timestamp BETWEEN {{.start_datetime}} AND {{.end_datetime}} GROUP BY ts ORDER BY ts" },
+          { "name": "B", "legend": "output tokens", "disabled": false,
+            "query": "SELECT toStartOfInterval(timestamp, INTERVAL {{.step_interval}} SECOND) AS ts, sum(attributes_number['gen_ai.usage.output_tokens']) AS value FROM signoz_traces.distributed_signoz_index_v3 WHERE serviceName = 'askdocs' AND mapContains(attributes_string, 'gen_ai.input.messages') AND timestamp BETWEEN {{.start_datetime}} AND {{.end_datetime}} GROUP BY ts ORDER BY ts" }
+        ],
+        "promql": [{ "name": "A", "query": "", "legend": "", "disabled": false }],
+        "builder": { "queryData": [], "queryFormulas": [] }
+      }
+    },
+    {
+      "id": "llm_calls",
+      "title": "LLM calls / interval — askdocs",
+      "description": "gen_ai span count. Cache hits (L1) don't call the model, so this drops after the fix.",
+      "panelTypes": "graph",
+      "timePreferance": "GLOBAL_TIME",
+      "nullZeroValues": "zero",
+      "opacity": "1",
+      "yAxisUnit": "short",
+      "query": {
+        "queryType": "clickhouse_sql",
+        "clickhouse_sql": [
+          { "name": "A", "legend": "llm calls", "disabled": false,
+            "query": "SELECT toStartOfInterval(timestamp, INTERVAL {{.step_interval}} SECOND) AS ts, count() AS value FROM signoz_traces.distributed_signoz_index_v3 WHERE serviceName = 'askdocs' AND mapContains(attributes_string, 'gen_ai.input.messages') AND timestamp BETWEEN {{.start_datetime}} AND {{.end_datetime}} GROUP BY ts ORDER BY ts" }
+        ],
+        "promql": [{ "name": "A", "query": "", "legend": "", "disabled": false }],
+        "builder": { "queryData": [], "queryFormulas": [] }
+      }
+    },
+    {
+      "id": "input_token_quantiles",
+      "title": "Input tokens per request (p50 / p95)",
+      "description": "Prompt-size distribution. L2 (prompt bloat) shows as a high p50; the fix collapses it toward the lean allowance.",
+      "panelTypes": "graph",
+      "timePreferance": "GLOBAL_TIME",
+      "nullZeroValues": "zero",
+      "opacity": "1",
+      "yAxisUnit": "short",
+      "query": {
+        "queryType": "clickhouse_sql",
+        "clickhouse_sql": [
+          { "name": "A", "legend": "p50 input tokens", "disabled": false,
+            "query": "SELECT toStartOfInterval(timestamp, INTERVAL {{.step_interval}} SECOND) AS ts, quantile(0.5)(attributes_number['gen_ai.usage.input_tokens']) AS value FROM signoz_traces.distributed_signoz_index_v3 WHERE serviceName = 'askdocs' AND mapContains(attributes_string, 'gen_ai.input.messages') AND timestamp BETWEEN {{.start_datetime}} AND {{.end_datetime}} GROUP BY ts ORDER BY ts" },
+          { "name": "B", "legend": "p95 input tokens", "disabled": false,
+            "query": "SELECT toStartOfInterval(timestamp, INTERVAL {{.step_interval}} SECOND) AS ts, quantile(0.95)(attributes_number['gen_ai.usage.input_tokens']) AS value FROM signoz_traces.distributed_signoz_index_v3 WHERE serviceName = 'askdocs' AND mapContains(attributes_string, 'gen_ai.input.messages') AND timestamp BETWEEN {{.start_datetime}} AND {{.end_datetime}} GROUP BY ts ORDER BY ts" }
+        ],
+        "promql": [{ "name": "A", "query": "", "legend": "", "disabled": false }],
+        "builder": { "queryData": [], "queryFormulas": [] }
+      }
+    },
+    {
+      "id": "cache_read_tokens",
+      "title": "Cache-read input tokens",
+      "description": "gen_ai.usage.cache_read.input_tokens — nonzero once the L1 cache is doing work.",
+      "panelTypes": "graph",
+      "timePreferance": "GLOBAL_TIME",
+      "nullZeroValues": "zero",
+      "opacity": "1",
+      "yAxisUnit": "short",
+      "query": {
+        "queryType": "clickhouse_sql",
+        "clickhouse_sql": [
+          { "name": "A", "legend": "cache-read tokens", "disabled": false,
+            "query": "SELECT toStartOfInterval(timestamp, INTERVAL {{.step_interval}} SECOND) AS ts, sum(attributes_number['gen_ai.usage.cache_read.input_tokens']) AS value FROM signoz_traces.distributed_signoz_index_v3 WHERE serviceName = 'askdocs' AND mapContains(attributes_string, 'gen_ai.input.messages') AND timestamp BETWEEN {{.start_datetime}} AND {{.end_datetime}} GROUP BY ts ORDER BY ts" }
+        ],
+        "promql": [{ "name": "A", "query": "", "legend": "", "disabled": false }],
+        "builder": { "queryData": [], "queryFormulas": [] }
+      }
+    },
+    {
+      "id": "total_tokens",
+      "title": "Total tokens (window)",
+      "description": "All gen_ai input+output tokens for askdocs over the selected range.",
+      "panelTypes": "value",
+      "timePreferance": "GLOBAL_TIME",
+      "nullZeroValues": "zero",
+      "opacity": "1",
+      "yAxisUnit": "short",
+      "query": {
+        "queryType": "clickhouse_sql",
+        "clickhouse_sql": [
+          { "name": "A", "legend": "total tokens", "disabled": false,
+            "query": "SELECT sum(attributes_number['gen_ai.usage.input_tokens'] + attributes_number['gen_ai.usage.output_tokens']) AS value FROM signoz_traces.distributed_signoz_index_v3 WHERE serviceName = 'askdocs' AND mapContains(attributes_string, 'gen_ai.input.messages') AND timestamp BETWEEN {{.start_datetime}} AND {{.end_datetime}}" }
+        ],
+        "promql": [{ "name": "A", "query": "", "legend": "", "disabled": false }],
+        "builder": { "queryData": [], "queryFormulas": [] }
+      }
+    },
+    {
+      "id": "calls_by_model",
+      "title": "Calls & tokens by model",
+      "description": "Per-model call count and token totals — the cost driver breakdown.",
+      "panelTypes": "table",
+      "timePreferance": "GLOBAL_TIME",
+      "nullZeroValues": "zero",
+      "opacity": "1",
+      "yAxisUnit": "short",
+      "query": {
+        "queryType": "clickhouse_sql",
+        "clickhouse_sql": [
+          { "name": "A", "legend": "", "disabled": false,
+            "query": "SELECT attributes_string['gen_ai.response.model'] AS model, count() AS calls, sum(attributes_number['gen_ai.usage.input_tokens']) AS input_tokens, sum(attributes_number['gen_ai.usage.output_tokens']) AS output_tokens FROM signoz_traces.distributed_signoz_index_v3 WHERE serviceName = 'askdocs' AND mapContains(attributes_string, 'gen_ai.input.messages') AND timestamp BETWEEN {{.start_datetime}} AND {{.end_datetime}} GROUP BY model ORDER BY calls DESC" }
+        ],
+        "promql": [{ "name": "A", "query": "", "legend": "", "disabled": false }],
+        "builder": { "queryData": [], "queryFormulas": [] }
+      }
+    },
+    {
+      "id": "cacheable_duplicates",
+      "title": "Cacheable duplicate prompts (L1)",
+      "description": "Prompt hashes answered more than once — repeats are pure waste an exact-match cache removes.",
+      "panelTypes": "table",
+      "timePreferance": "GLOBAL_TIME",
+      "nullZeroValues": "zero",
+      "opacity": "1",
+      "yAxisUnit": "short",
+      "query": {
+        "queryType": "clickhouse_sql",
+        "clickhouse_sql": [
+          { "name": "A", "legend": "", "disabled": false,
+            "query": "SELECT cityHash64(attributes_string['gen_ai.input.messages']) AS prompt_hash, count() AS calls, count() - 1 AS repeats, round(avg(attributes_number['gen_ai.usage.input_tokens'])) AS avg_input_tokens, round(avg(attributes_number['gen_ai.usage.output_tokens'])) AS avg_output_tokens FROM signoz_traces.distributed_signoz_index_v3 WHERE serviceName = 'askdocs' AND mapContains(attributes_string, 'gen_ai.input.messages') AND timestamp BETWEEN {{.start_datetime}} AND {{.end_datetime}} GROUP BY prompt_hash HAVING calls >= 2 ORDER BY calls DESC LIMIT 20" }
+        ],
+        "promql": [{ "name": "A", "query": "", "legend": "", "disabled": false }],
+        "builder": { "queryData": [], "queryFormulas": [] }
+      }
+    }
+  ],
+  "variables": {}
+}
