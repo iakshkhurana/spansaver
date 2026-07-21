@@ -1,0 +1,54 @@
+# SpanSaver stack — SigNoz itself runs from its own official compose, separately.
+# We JOIN its docker network so the auditor can reach ClickHouse + the SigNoz API by name.
+# D1 TODO: confirm the network name (`docker network ls`) and set SIGNOZ_DOCKER_NETWORK in .env.
+
+services:
+  collector:
+    image: otel/opentelemetry-collector-contrib:latest   # D1: pin an exact version
+    command: ["--config=/etc/otelcol/merged.yaml"]
+    volumes:
+      - ./collector:/etc/otelcol            # baseline + patches/ + merged.yaml (generated)
+    ports:
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+    # D1 TODO: entrypoint wrapper that merges baseline + applied patches into merged.yaml
+    #          on start; auditor triggers re-merge + reload on apply/unapply.
+
+  orders:
+    build: ./victim-stack/orders
+    env_file: .env
+    environment: [ OTEL_SERVICE_NAME=orders ]
+    depends_on: [ collector ]
+
+  payments:
+    build: ./victim-stack/payments
+    env_file: .env
+    environment: [ OTEL_SERVICE_NAME=payments ]
+    depends_on: [ collector ]
+
+  askdocs:
+    build: ./victim-stack/askdocs
+    env_file: .env
+    environment: [ OTEL_SERVICE_NAME=askdocs ]
+    depends_on: [ collector ]
+
+  auditor:
+    build: ./auditor
+    env_file: .env
+    ports: [ "8100:8100" ]
+    volumes:
+      - ./collector:/workspace/collector    # fixgen writes patches here
+    # needs to reach ClickHouse + SigNoz API on the SigNoz network (below)
+
+  ui:
+    build: ./ui
+    env_file: .env
+    ports: [ "3000:3000" ]
+    depends_on: [ auditor ]
+
+networks:
+  default:
+    name: ${SIGNOZ_DOCKER_NETWORK:-signoz-net}
+    external: true
+# If joining the external network causes friction on D1, fall back to a local network +
+# host-published SigNoz ports, and note it in SETUP.md. Working > pretty.
