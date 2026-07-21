@@ -61,10 +61,11 @@ FULL_DOCS = "\n\n".join(f"[{k}] {v}" for k, v in DOCS.items())
 
 _cache: dict[str, tuple[str, float]] = {}
 
-# Runtime cache state. Starts from env (WASTE_LLM_NOCACHE forces the uncached "before"); the L1
-# fix flips it live via POST /admin/cache so applying the fix is an instant, reversible config
-# change on the running service — no container rebuild, and the token graph steps down on camera.
-_cache_enabled = ASKDOCS_CACHE and not WASTE_LLM_NOCACHE
+# Runtime waste state. Both start from env (the wasteful "before"); the L1/L2 fixes flip them
+# live via POST /admin/* so applying a fix is an instant, reversible config change on the running
+# service — no container rebuild, and the token graph steps down on camera.
+_cache_enabled = ASKDOCS_CACHE and not WASTE_LLM_NOCACHE   # L1: exact-match response cache
+_bloat_enabled = WASTE_LLM_BLOAT                           # L2: full-docs preamble on every prompt
 
 
 class AskRequest(BaseModel):
@@ -76,6 +77,10 @@ class CacheToggle(BaseModel):
     clear: bool = False    # drop cached entries when disabling, so "before" is genuinely cold
 
 
+class BloatToggle(BaseModel):
+    enabled: bool          # L2 fix applies with enabled=false (context moves behind retrieval)
+
+
 def _retrieve(question: str) -> str:
     """Naive keyword retrieval: return the single most relevant doc (the non-wasteful path)."""
     q = question.lower()
@@ -84,7 +89,7 @@ def _retrieve(question: str) -> str:
 
 
 def _system_prompt(question: str) -> str:
-    context = FULL_DOCS if WASTE_LLM_BLOAT else _retrieve(question)
+    context = FULL_DOCS if _bloat_enabled else _retrieve(question)
     return (
         "You are a concise customer-support assistant. Answer only from the context.\n\n"
         f"Context:\n{context}"
@@ -118,7 +123,7 @@ def root():
         "service": "askdocs",
         "provider": LLM_PROVIDER,
         "model": ASKDOCS_MODEL,
-        "waste": {"nocache": WASTE_LLM_NOCACHE, "bloat": WASTE_LLM_BLOAT},
+        "waste": {"nocache": WASTE_LLM_NOCACHE, "bloat": _bloat_enabled},
         "cache_enabled": _cache_enabled,
     }
 
@@ -133,6 +138,16 @@ def admin_cache(toggle: CacheToggle):
         _cache.clear()
     log.info("admin: cache_enabled=%s (cleared=%s)", _cache_enabled, toggle.clear or not toggle.enabled)
     return {"cache_enabled": _cache_enabled, "entries": len(_cache)}
+
+
+@app.post("/admin/bloat")
+def admin_bloat(toggle: BloatToggle):
+    """Flip the full-docs preamble at runtime — this IS applying/unapplying the L2 fix. The
+    auditor calls this on /apply/L2 (enabled=false → context behind retrieval) and /unapply/L2."""
+    global _bloat_enabled
+    _bloat_enabled = toggle.enabled
+    log.info("admin: bloat_enabled=%s", _bloat_enabled)
+    return {"bloat_enabled": _bloat_enabled}
 
 
 @app.get("/healthz")

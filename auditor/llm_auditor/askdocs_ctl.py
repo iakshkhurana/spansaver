@@ -21,10 +21,10 @@ class AskdocsControlError(RuntimeError):
     pass
 
 
-def _post_cache(enabled: bool, clear: bool = False) -> dict:
-    url = f"{ASKDOCS_URL.rstrip('/')}/admin/cache"
+def _post(path: str, payload: dict) -> dict:
+    url = f"{ASKDOCS_URL.rstrip('/')}{path}"
     try:
-        resp = httpx.post(url, json={"enabled": enabled, "clear": clear}, timeout=_TIMEOUT)
+        resp = httpx.post(url, json=payload, timeout=_TIMEOUT)
         resp.raise_for_status()
         return resp.json()
     except Exception as e:  # noqa: BLE001 - surface any HTTP/connection error loudly
@@ -34,13 +34,29 @@ def _post_cache(enabled: bool, clear: bool = False) -> dict:
         ) from e
 
 
+# Each LLM fix maps to one askdocs admin flip. apply = the fixed (non-wasteful) state; unapply =
+# back to the wasteful "before". L1 = exact-match cache on; L2 = full-docs preamble off.
+_APPLY = {
+    "L1": lambda: _post("/admin/cache", {"enabled": True}),
+    "L2": lambda: _post("/admin/bloat", {"enabled": False}),
+}
+_UNAPPLY = {
+    "L1": lambda: _post("/admin/cache", {"enabled": False, "clear": True}),
+    "L2": lambda: _post("/admin/bloat", {"enabled": True}),
+}
+
+
 def apply(finding_id: str = "L1") -> dict:
-    """Turn the cache on — this is applying the L1 fix on the live service."""
-    state = _post_cache(enabled=True)
-    return {"applied": finding_id, "target": "askdocs", **state}
+    """Apply an LLM fix by flipping the matching askdocs runtime toggle."""
+    fn = _APPLY.get(finding_id.upper())
+    if fn is None:
+        raise AskdocsControlError(f"no askdocs apply action for finding {finding_id}")
+    return {"applied": finding_id.upper(), "target": "askdocs", **fn()}
 
 
 def unapply(finding_id: str = "L1") -> dict:
-    """Turn the cache off and clear it, restoring the genuinely-uncached 'before' state."""
-    state = _post_cache(enabled=False, clear=True)
-    return {"unapplied": finding_id, "target": "askdocs", **state}
+    """Reverse an LLM fix, restoring the wasteful 'before' state on the live service."""
+    fn = _UNAPPLY.get(finding_id.upper())
+    if fn is None:
+        raise AskdocsControlError(f"no askdocs unapply action for finding {finding_id}")
+    return {"unapplied": finding_id.upper(), "target": "askdocs", **fn()}

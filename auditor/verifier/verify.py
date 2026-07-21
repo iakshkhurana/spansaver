@@ -86,7 +86,33 @@ def _l1_current(ch: ClickHouse, finding: Finding) -> dict:
             "input_tokens": int(in_tok or 0), "output_tokens": int(out_tok or 0)}
 
 
-_CURRENT = {"T1": _t1_current, "T2": _t2_current, "T3": _t3_current, "L1": _l1_current}
+def _l2_current(ch: ClickHouse, finding: Finding) -> dict:
+    """L2 after-apply signal: p50/p95 input tokens per askdocs request over the recent window.
+    With the preamble behind retrieval, per-request input tokens drop sharply."""
+    service = finding.service or "askdocs"
+    in_cell = f"{schema.SPAN_ATTRS_NUMBER}['{attrs.INPUT_TOKEN_KEY}']"
+    out_cell = f"{schema.SPAN_ATTRS_NUMBER}['{attrs.OUTPUT_TOKEN_KEY}']"
+    sql = f"""
+        SELECT count()                   AS calls,
+               quantile(0.5)({in_cell})  AS p50_in,
+               quantile(0.95)({in_cell}) AS p95_in,
+               quantile(0.5)({out_cell}) AS p50_out,
+               min({in_cell})            AS min_in
+        FROM {schema.T_TRACES}
+        WHERE {schema.SPAN_TS} >= now() - INTERVAL {_win_min()} MINUTE
+          AND {schema.SPAN_SERVICE} = '{service}'
+          AND mapContains({schema.SPAN_ATTRS_STRING}, '{attrs.PROMPT_KEY}')
+    """
+    calls, p50_in, p95_in, p50_out, min_in = ch.query(sql)[0]
+    return {"signal": "askdocs input tokens/request", "window_minutes": _win_min(),
+            "calls": int(calls or 0), "p50_input_tokens": round(float(p50_in or 0), 1),
+            "p95_input_tokens": round(float(p95_in or 0), 1),
+            "p50_output_tokens": round(float(p50_out or 0), 1),
+            "min_input_tokens": round(float(min_in or 0), 1)}
+
+
+_CURRENT = {"T1": _t1_current, "T2": _t2_current, "T3": _t3_current,
+            "L1": _l1_current, "L2": _l2_current}
 
 
 def integrity_sweep(api: SigNozAPI | None = None) -> dict:
