@@ -10,6 +10,7 @@ The honest question a verify answers: "did the waste actually stop, and did we b
 from __future__ import annotations
 
 from auditor.config import settings
+from auditor.llm_auditor import attrs
 from auditor.telemetry_auditor import schema
 from auditor.telemetry_auditor.clickhouse import ClickHouse
 from auditor.telemetry_auditor.findings import Finding
@@ -63,7 +64,29 @@ def _t3_current(ch: ClickHouse, finding: Finding) -> dict:
     return {"signal": "health-check spans", "window_minutes": _win_min(), "health_ok_spans": int(ho)}
 
 
-_CURRENT = {"T1": _t1_current, "T2": _t2_current, "T3": _t3_current}
+def _l1_current(ch: ClickHouse, finding: Finding) -> dict:
+    """L1 after-apply signal: gen_ai calls + tokens for askdocs over the recent window, plus the
+    cacheable-repeat count. With the cache on, exact-duplicate prompts are served before the LLM
+    call, so they emit no new gen_ai span — repeats collapse toward 0 and tokens step down."""
+    service = finding.service or "askdocs"
+    prompt_cell = f"{schema.SPAN_ATTRS_STRING}['{attrs.PROMPT_KEY}']"
+    in_cell = f"{schema.SPAN_ATTRS_NUMBER}['{attrs.INPUT_TOKEN_KEY}']"
+    out_cell = f"{schema.SPAN_ATTRS_NUMBER}['{attrs.OUTPUT_TOKEN_KEY}']"
+    base = (f"FROM {schema.T_TRACES} "
+            f"WHERE {schema.SPAN_TS} >= now() - INTERVAL {_win_min()} MINUTE "
+            f"AND {schema.SPAN_SERVICE} = '{service}' "
+            f"AND mapContains({schema.SPAN_ATTRS_STRING}, '{attrs.PROMPT_KEY}')")
+    calls, in_tok, out_tok = ch.query(
+        f"SELECT count(), sum({in_cell}), sum({out_cell}) {base}")[0]
+    repeats = ch.query(
+        f"SELECT sum(n - 1) FROM (SELECT count() AS n {base} "
+        f"GROUP BY cityHash64({prompt_cell}) HAVING n > 1)")[0][0]
+    return {"signal": "askdocs gen_ai calls", "window_minutes": _win_min(),
+            "llm_calls": int(calls or 0), "cacheable_repeats": int(repeats or 0),
+            "input_tokens": int(in_tok or 0), "output_tokens": int(out_tok or 0)}
+
+
+_CURRENT = {"T1": _t1_current, "T2": _t2_current, "T3": _t3_current, "L1": _l1_current}
 
 
 def integrity_sweep(api: SigNozAPI | None = None) -> dict:
