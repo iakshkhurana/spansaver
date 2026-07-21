@@ -22,27 +22,30 @@ the exact signals the L1/L2 detectors act on, so the dashboard and the auditor t
 SigNoz UI → **Dashboards → + New dashboard → Import JSON** → paste `agent-ops.json` (or upload it).
 Then set the time range to cover your traffic window.
 
-> **Time-filter tokens:** panels use SigNoz's clickhouse-query templating
-> (`{{.start_datetime}}`, `{{.end_datetime}}`, `{{.step_interval}}`). These are stable on v0.133.
-> If this build rejects the import or a panel shows no data, recreate the panel via
-> **+ New panel → ClickHouse Query** and paste the query below — the SQL itself is version-proof.
+> **Time-filter tokens (confirmed on v0.133):** panels use `{{.start_timestamp_ms}}` /
+> `{{.end_timestamp_ms}}` (epoch millis, via `fromUnixTimestamp64Milli`). Bucketing is a fixed
+> `INTERVAL 1 MINUTE` — this build does **not** expand `{{.step_interval}}` (it passes through
+> literally and breaks the query). If a panel shows no data, recreate it via
+> **+ New panel → ClickHouse Query** and paste the query below — the SQL is version-proof.
 
 ## Raw queries (fallback — build panels by hand if import ever drifts)
 Shared filter on every query:
 ```sql
 serviceName = 'askdocs'
 AND mapContains(attributes_string, 'gen_ai.input.messages')   -- = a gen_ai/LLM span
-AND timestamp BETWEEN {{.start_datetime}} AND {{.end_datetime}}
+AND timestamp >= fromUnixTimestamp64Milli({{.start_timestamp_ms}})
+  AND timestamp <= fromUnixTimestamp64Milli({{.end_timestamp_ms}})
 FROM signoz_traces.distributed_signoz_index_v3
 ```
 
 **Tokens over time** (two series):
 ```sql
-SELECT toStartOfInterval(timestamp, INTERVAL {{.step_interval}} SECOND) AS ts,
+SELECT toStartOfInterval(timestamp, INTERVAL 1 MINUTE) AS ts,
        sum(attributes_number['gen_ai.usage.input_tokens']) AS value
 FROM signoz_traces.distributed_signoz_index_v3
 WHERE serviceName='askdocs' AND mapContains(attributes_string,'gen_ai.input.messages')
-  AND timestamp BETWEEN {{.start_datetime}} AND {{.end_datetime}}
+  AND timestamp >= fromUnixTimestamp64Milli({{.start_timestamp_ms}})
+  AND timestamp <= fromUnixTimestamp64Milli({{.end_timestamp_ms}})
 GROUP BY ts ORDER BY ts
 -- second series: swap input_tokens -> output_tokens
 ```
@@ -62,7 +65,8 @@ SELECT cityHash64(attributes_string['gen_ai.input.messages']) AS prompt_hash,
        round(avg(attributes_number['gen_ai.usage.output_tokens'])) AS avg_output_tokens
 FROM signoz_traces.distributed_signoz_index_v3
 WHERE serviceName='askdocs' AND mapContains(attributes_string,'gen_ai.input.messages')
-  AND timestamp BETWEEN {{.start_datetime}} AND {{.end_datetime}}
+  AND timestamp >= fromUnixTimestamp64Milli({{.start_timestamp_ms}})
+  AND timestamp <= fromUnixTimestamp64Milli({{.end_timestamp_ms}})
 GROUP BY prompt_hash HAVING calls >= 2 ORDER BY calls DESC LIMIT 20
 ```
 

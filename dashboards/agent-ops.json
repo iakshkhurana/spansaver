@@ -25,9 +25,9 @@
         "queryType": "clickhouse_sql",
         "clickhouse_sql": [
           { "name": "A", "legend": "input tokens", "disabled": false,
-            "query": "SELECT toStartOfInterval(timestamp, INTERVAL {{.step_interval}} SECOND) AS ts, sum(attributes_number['gen_ai.usage.input_tokens']) AS value FROM signoz_traces.distributed_signoz_index_v3 WHERE serviceName = 'askdocs' AND mapContains(attributes_string, 'gen_ai.input.messages') AND timestamp BETWEEN {{.start_datetime}} AND {{.end_datetime}} GROUP BY ts ORDER BY ts" },
+            "query": "SELECT toStartOfInterval(timestamp, INTERVAL 1 MINUTE) AS ts, sum(attributes_number['gen_ai.usage.input_tokens']) AS value FROM signoz_traces.distributed_signoz_index_v3 WHERE serviceName = 'askdocs' AND mapContains(attributes_string, 'gen_ai.input.messages') AND timestamp >= fromUnixTimestamp64Milli({{.start_timestamp_ms}}) AND timestamp <= fromUnixTimestamp64Milli({{.end_timestamp_ms}}) GROUP BY ts ORDER BY ts" },
           { "name": "B", "legend": "output tokens", "disabled": false,
-            "query": "SELECT toStartOfInterval(timestamp, INTERVAL {{.step_interval}} SECOND) AS ts, sum(attributes_number['gen_ai.usage.output_tokens']) AS value FROM signoz_traces.distributed_signoz_index_v3 WHERE serviceName = 'askdocs' AND mapContains(attributes_string, 'gen_ai.input.messages') AND timestamp BETWEEN {{.start_datetime}} AND {{.end_datetime}} GROUP BY ts ORDER BY ts" }
+            "query": "SELECT toStartOfInterval(timestamp, INTERVAL 1 MINUTE) AS ts, sum(attributes_number['gen_ai.usage.output_tokens']) AS value FROM signoz_traces.distributed_signoz_index_v3 WHERE serviceName = 'askdocs' AND mapContains(attributes_string, 'gen_ai.input.messages') AND timestamp >= fromUnixTimestamp64Milli({{.start_timestamp_ms}}) AND timestamp <= fromUnixTimestamp64Milli({{.end_timestamp_ms}}) GROUP BY ts ORDER BY ts" }
         ],
         "promql": [{ "name": "A", "query": "", "legend": "", "disabled": false }],
         "builder": { "queryData": [], "queryFormulas": [] }
@@ -46,7 +46,7 @@
         "queryType": "clickhouse_sql",
         "clickhouse_sql": [
           { "name": "A", "legend": "llm calls", "disabled": false,
-            "query": "SELECT toStartOfInterval(timestamp, INTERVAL {{.step_interval}} SECOND) AS ts, count() AS value FROM signoz_traces.distributed_signoz_index_v3 WHERE serviceName = 'askdocs' AND mapContains(attributes_string, 'gen_ai.input.messages') AND timestamp BETWEEN {{.start_datetime}} AND {{.end_datetime}} GROUP BY ts ORDER BY ts" }
+            "query": "SELECT toStartOfInterval(timestamp, INTERVAL 1 MINUTE) AS ts, count() AS value FROM signoz_traces.distributed_signoz_index_v3 WHERE serviceName = 'askdocs' AND mapContains(attributes_string, 'gen_ai.input.messages') AND timestamp >= fromUnixTimestamp64Milli({{.start_timestamp_ms}}) AND timestamp <= fromUnixTimestamp64Milli({{.end_timestamp_ms}}) GROUP BY ts ORDER BY ts" }
         ],
         "promql": [{ "name": "A", "query": "", "legend": "", "disabled": false }],
         "builder": { "queryData": [], "queryFormulas": [] }
@@ -65,9 +65,9 @@
         "queryType": "clickhouse_sql",
         "clickhouse_sql": [
           { "name": "A", "legend": "p50 input tokens", "disabled": false,
-            "query": "SELECT toStartOfInterval(timestamp, INTERVAL {{.step_interval}} SECOND) AS ts, quantile(0.5)(attributes_number['gen_ai.usage.input_tokens']) AS value FROM signoz_traces.distributed_signoz_index_v3 WHERE serviceName = 'askdocs' AND mapContains(attributes_string, 'gen_ai.input.messages') AND timestamp BETWEEN {{.start_datetime}} AND {{.end_datetime}} GROUP BY ts ORDER BY ts" },
+            "query": "SELECT toStartOfInterval(timestamp, INTERVAL 1 MINUTE) AS ts, quantile(0.5)(attributes_number['gen_ai.usage.input_tokens']) AS value FROM signoz_traces.distributed_signoz_index_v3 WHERE serviceName = 'askdocs' AND mapContains(attributes_string, 'gen_ai.input.messages') AND timestamp >= fromUnixTimestamp64Milli({{.start_timestamp_ms}}) AND timestamp <= fromUnixTimestamp64Milli({{.end_timestamp_ms}}) GROUP BY ts ORDER BY ts" },
           { "name": "B", "legend": "p95 input tokens", "disabled": false,
-            "query": "SELECT toStartOfInterval(timestamp, INTERVAL {{.step_interval}} SECOND) AS ts, quantile(0.95)(attributes_number['gen_ai.usage.input_tokens']) AS value FROM signoz_traces.distributed_signoz_index_v3 WHERE serviceName = 'askdocs' AND mapContains(attributes_string, 'gen_ai.input.messages') AND timestamp BETWEEN {{.start_datetime}} AND {{.end_datetime}} GROUP BY ts ORDER BY ts" }
+            "query": "SELECT toStartOfInterval(timestamp, INTERVAL 1 MINUTE) AS ts, quantile(0.95)(attributes_number['gen_ai.usage.input_tokens']) AS value FROM signoz_traces.distributed_signoz_index_v3 WHERE serviceName = 'askdocs' AND mapContains(attributes_string, 'gen_ai.input.messages') AND timestamp >= fromUnixTimestamp64Milli({{.start_timestamp_ms}}) AND timestamp <= fromUnixTimestamp64Milli({{.end_timestamp_ms}}) GROUP BY ts ORDER BY ts" }
         ],
         "promql": [{ "name": "A", "query": "", "legend": "", "disabled": false }],
         "builder": { "queryData": [], "queryFormulas": [] }
@@ -86,7 +86,7 @@
         "queryType": "clickhouse_sql",
         "clickhouse_sql": [
           { "name": "A", "legend": "cache-read tokens", "disabled": false,
-            "query": "SELECT toStartOfInterval(timestamp, INTERVAL {{.step_interval}} SECOND) AS ts, sum(attributes_number['gen_ai.usage.cache_read.input_tokens']) AS value FROM signoz_traces.distributed_signoz_index_v3 WHERE serviceName = 'askdocs' AND mapContains(attributes_string, 'gen_ai.input.messages') AND timestamp BETWEEN {{.start_datetime}} AND {{.end_datetime}} GROUP BY ts ORDER BY ts" }
+            "query": "SELECT toStartOfInterval(timestamp, INTERVAL 1 MINUTE) AS ts, sum(attributes_number['gen_ai.usage.cache_read.input_tokens']) AS value FROM signoz_traces.distributed_signoz_index_v3 WHERE serviceName = 'askdocs' AND mapContains(attributes_string, 'gen_ai.input.messages') AND timestamp >= fromUnixTimestamp64Milli({{.start_timestamp_ms}}) AND timestamp <= fromUnixTimestamp64Milli({{.end_timestamp_ms}}) GROUP BY ts ORDER BY ts" }
         ],
         "promql": [{ "name": "A", "query": "", "legend": "", "disabled": false }],
         "builder": { "queryData": [], "queryFormulas": [] }
@@ -105,7 +105,7 @@
         "queryType": "clickhouse_sql",
         "clickhouse_sql": [
           { "name": "A", "legend": "total tokens", "disabled": false,
-            "query": "SELECT sum(attributes_number['gen_ai.usage.input_tokens'] + attributes_number['gen_ai.usage.output_tokens']) AS value FROM signoz_traces.distributed_signoz_index_v3 WHERE serviceName = 'askdocs' AND mapContains(attributes_string, 'gen_ai.input.messages') AND timestamp BETWEEN {{.start_datetime}} AND {{.end_datetime}}" }
+            "query": "SELECT sum(attributes_number['gen_ai.usage.input_tokens'] + attributes_number['gen_ai.usage.output_tokens']) AS value FROM signoz_traces.distributed_signoz_index_v3 WHERE serviceName = 'askdocs' AND mapContains(attributes_string, 'gen_ai.input.messages') AND timestamp >= fromUnixTimestamp64Milli({{.start_timestamp_ms}}) AND timestamp <= fromUnixTimestamp64Milli({{.end_timestamp_ms}})" }
         ],
         "promql": [{ "name": "A", "query": "", "legend": "", "disabled": false }],
         "builder": { "queryData": [], "queryFormulas": [] }
@@ -124,7 +124,7 @@
         "queryType": "clickhouse_sql",
         "clickhouse_sql": [
           { "name": "A", "legend": "", "disabled": false,
-            "query": "SELECT attributes_string['gen_ai.response.model'] AS model, count() AS calls, sum(attributes_number['gen_ai.usage.input_tokens']) AS input_tokens, sum(attributes_number['gen_ai.usage.output_tokens']) AS output_tokens FROM signoz_traces.distributed_signoz_index_v3 WHERE serviceName = 'askdocs' AND mapContains(attributes_string, 'gen_ai.input.messages') AND timestamp BETWEEN {{.start_datetime}} AND {{.end_datetime}} GROUP BY model ORDER BY calls DESC" }
+            "query": "SELECT attributes_string['gen_ai.response.model'] AS model, count() AS calls, sum(attributes_number['gen_ai.usage.input_tokens']) AS input_tokens, sum(attributes_number['gen_ai.usage.output_tokens']) AS output_tokens FROM signoz_traces.distributed_signoz_index_v3 WHERE serviceName = 'askdocs' AND mapContains(attributes_string, 'gen_ai.input.messages') AND timestamp >= fromUnixTimestamp64Milli({{.start_timestamp_ms}}) AND timestamp <= fromUnixTimestamp64Milli({{.end_timestamp_ms}}) GROUP BY model ORDER BY calls DESC" }
         ],
         "promql": [{ "name": "A", "query": "", "legend": "", "disabled": false }],
         "builder": { "queryData": [], "queryFormulas": [] }
@@ -143,7 +143,7 @@
         "queryType": "clickhouse_sql",
         "clickhouse_sql": [
           { "name": "A", "legend": "", "disabled": false,
-            "query": "SELECT cityHash64(attributes_string['gen_ai.input.messages']) AS prompt_hash, count() AS calls, count() - 1 AS repeats, round(avg(attributes_number['gen_ai.usage.input_tokens'])) AS avg_input_tokens, round(avg(attributes_number['gen_ai.usage.output_tokens'])) AS avg_output_tokens FROM signoz_traces.distributed_signoz_index_v3 WHERE serviceName = 'askdocs' AND mapContains(attributes_string, 'gen_ai.input.messages') AND timestamp BETWEEN {{.start_datetime}} AND {{.end_datetime}} GROUP BY prompt_hash HAVING calls >= 2 ORDER BY calls DESC LIMIT 20" }
+            "query": "SELECT cityHash64(attributes_string['gen_ai.input.messages']) AS prompt_hash, count() AS calls, count() - 1 AS repeats, round(avg(attributes_number['gen_ai.usage.input_tokens'])) AS avg_input_tokens, round(avg(attributes_number['gen_ai.usage.output_tokens'])) AS avg_output_tokens FROM signoz_traces.distributed_signoz_index_v3 WHERE serviceName = 'askdocs' AND mapContains(attributes_string, 'gen_ai.input.messages') AND timestamp >= fromUnixTimestamp64Milli({{.start_timestamp_ms}}) AND timestamp <= fromUnixTimestamp64Milli({{.end_timestamp_ms}}) GROUP BY prompt_hash HAVING calls >= 2 ORDER BY calls DESC LIMIT 20" }
         ],
         "promql": [{ "name": "A", "query": "", "legend": "", "disabled": false }],
         "builder": { "queryData": [], "queryFormulas": [] }
