@@ -4,15 +4,16 @@
 
 services:
   collector:
-    image: otel/opentelemetry-collector-contrib:latest   # D1: pin an exact version
+    build: ./collector                      # otelcol-contrib + entrypoint that merges patches
+    env_file: .env                          # provides SIGNOZ_COLLECTOR_OTLP_ENDPOINT
     command: ["--config=/etc/otelcol/merged.yaml"]
     volumes:
-      - ./collector:/etc/otelcol            # baseline + patches/ + merged.yaml (generated)
+      - ./collector:/etc/otelcol            # baseline + merge_config.py + patches/ + merged.yaml
     ports:
       - "4317:4317"   # OTLP gRPC
       - "4318:4318"   # OTLP HTTP
-    # D1 TODO: entrypoint wrapper that merges baseline + applied patches into merged.yaml
-    #          on start; auditor triggers re-merge + reload on apply/unapply.
+    # entrypoint.sh runs merge_config.py on start (baseline + patches/*.yaml -> merged.yaml).
+    # D2: auditor triggers re-merge + collector restart on apply/unapply.
 
   orders:
     build: ./victim-stack/orders

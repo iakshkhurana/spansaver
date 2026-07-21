@@ -1,0 +1,2 @@
+# Generated collector fix patches (T1.yaml, T2.yaml, …) land here — deep-merged into
+# merged.yaml by merge_config.py. Empty on D1.

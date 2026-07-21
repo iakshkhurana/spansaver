@@ -1,0 +1,11 @@
+# secrets / local config
+.env
+
+# generated collector config (built at container start by merge_config.py)
+collector/merged.yaml
+
+# python / node noise
+__pycache__/
+*.pyc
+node_modules/
+.next/

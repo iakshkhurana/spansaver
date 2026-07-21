@@ -1,0 +1,66 @@
+# SpanSaver collector — BASELINE config. NEVER edit at runtime (golden rule #4).
+# Generated fix patches live in collector/patches/*.yaml and are deep-merged into
+# merged.yaml at container start by merge_config.py (see entrypoint.sh). The auditor
+# re-runs that merge on apply/unapply.
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+  # Prometheus receiver stub — scrapes the collector's own telemetry for now so the
+  # metrics pipeline is live on D1. Real scrape targets get added in a later increment.
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: otel-collector-self
+          scrape_interval: 30s
+          static_configs:
+            - targets: [0.0.0.0:8888]
+
+processors:
+  # memory_limiter must come first in every pipeline.
+  memory_limiter:
+    check_interval: 1s
+    limit_percentage: 80
+    spike_limit_percentage: 20
+  batch:
+    send_batch_size: 1024
+    timeout: 5s
+  resource:
+    attributes:
+      - key: deployment.environment
+        value: spansaver-demo
+        action: upsert
+
+exporters:
+  # Onward to SigNoz's own ingest (its bundled OTel collector) on the shared docker
+  # network. CONFIRM the service name + port against the live SigNoz compose
+  # (`docker ps`); set SIGNOZ_COLLECTOR_OTLP_ENDPOINT in .env (host:port, no scheme).
+  otlp/signoz:
+    endpoint: ${env:SIGNOZ_COLLECTOR_OTLP_ENDPOINT}
+    tls:
+      insecure: true
+  # Kept on the pipelines during bring-up so we can see data flow in `make logs`.
+  debug:
+    verbosity: normal
+
+service:
+  telemetry:
+    metrics:
+      address: 0.0.0.0:8888
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, batch]
+      exporters: [otlp/signoz, debug]
+    metrics:
+      receivers: [otlp, prometheus]
+      processors: [memory_limiter, resource, batch]
+      exporters: [otlp/signoz]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, batch]
+      exporters: [otlp/signoz]
