@@ -73,12 +73,17 @@ SAMPLE_METRIC_NAME = "metric_name"
 SAMPLE_UNIX_MILLI = "unix_milli"
 SAMPLE_VALUE = "value"
 
-# Metric-name prefixes/suffixes SigNoz adds or that are internal; used to avoid false positives
-# in the T2 orphan-metric set difference (never flag SigNoz's own or runtime plumbing metrics).
+# Metric-name prefixes/suffixes that are SigNoz-internal, collector self-telemetry, language
+# runtime, or Prometheus scrape plumbing. Used to avoid false positives in the T2 orphan-metric
+# set difference (never recommend dropping infra's own metrics). Confirmed against the live
+# metric universe on 2026-07-21: otelcol_*, signoz_*, http.*, asyncio.*, scrape_*, up.
 METRIC_INTERNAL_PREFIXES = ("signoz_", "chi_", "clickhouse_", "otelcol_")
 METRIC_RUNTIME_PREFIXES = (
     "system_", "process_", "runtime_", "http_", "rpc_", "k8s_", "container_",
+    "asyncio_", "scrape_", "net_", "db_", "messaging_", "python_",
 )
+# Exact metric names that are infra plumbing (Prometheus meta-metrics).
+METRIC_INTERNAL_EXACT = ("up", "target_info", "scrape_series_added")
 # Histogram/summary component suffixes appended to the base metric_name by SigNoz.
 METRIC_COMPONENT_SUFFIXES = (".bucket", ".count", ".sum", ".min", ".max")
 
@@ -89,3 +94,14 @@ def metric_base_name(name: str) -> str:
         if name.endswith(suf):
             return name[: -len(suf)]
     return name
+
+
+def is_internal_metric(name: str) -> bool:
+    """True if a metric is infra/runtime plumbing and must be excluded from orphan detection.
+    OTel emits dotted names (http.server.duration); SigNoz may keep dots — normalize to '_'
+    before prefix-matching so both forms are caught."""
+    base = metric_base_name(name)
+    norm = base.replace(".", "_").lower()
+    if norm in METRIC_INTERNAL_EXACT:
+        return True
+    return norm.startswith(METRIC_INTERNAL_PREFIXES + METRIC_RUNTIME_PREFIXES)

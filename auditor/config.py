@@ -85,12 +85,36 @@ class Settings:
     price_per_gb_ingest: float = field(default_factory=lambda: _f("PRICE_PER_GB_INGEST", 0.30))
     price_in_per_mtok: float = field(default_factory=lambda: _f("PRICE_IN_PER_MTOK", 3.00))
     price_out_per_mtok: float = field(default_factory=lambda: _f("PRICE_OUT_PER_MTOK", 15.00))
+    # Metrics/traces have no clean per-GB proxy in ClickHouse, so their $ uses a per-million
+    # rate. Datapoints/spans are MEASURED; only these rates are the assumption (golden rule #2).
+    price_per_million_samples: float = field(default_factory=lambda: _f("PRICE_PER_MILLION_SAMPLES", 0.10))
+    price_per_million_spans: float = field(default_factory=lambda: _f("PRICE_PER_MILLION_SPANS", 0.20))
 
     # Windows
     audit_window_hours: int = field(default_factory=lambda: _i("AUDIT_WINDOW_HOURS", 24))
     verify_window_minutes: int = field(default_factory=lambda: _i("VERIFY_WINDOW_MINUTES", 10))
 
     auditor_port: int = field(default_factory=lambda: _i("AUDITOR_PORT", 8100))
+
+    # Where fixgen writes patches. Default = repo collector/; override COLLECTOR_DIR in the
+    # auditor container (the compose mounts ./collector there).
+    collector_dir: str = field(
+        default_factory=lambda: os.getenv("COLLECTOR_DIR")
+        or os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "collector"))
+    )
+
+    @property
+    def patches_dir(self) -> str:
+        """ACTIVE patches: merge_config globs collector/patches/*.yaml on collector start, so a
+        file here is live after the next collector restart. /apply copies here; /unapply removes."""
+        return os.path.join(self.collector_dir, "patches")
+
+    @property
+    def generated_dir(self) -> str:
+        """STAGED patches: fixgen writes here at /audit time. NOT globbed by merge_config, so a
+        generated patch is inert until /apply promotes it into patches_dir. This keeps per-finding
+        apply honest — a collector restart never activates a fix nobody applied."""
+        return os.path.join(self.collector_dir, "generated")
 
     @property
     def clickhouse(self) -> ClickHouseDSN:
