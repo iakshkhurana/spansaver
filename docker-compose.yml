@@ -26,6 +26,7 @@ services:
     build: ./victim-stack/payments
     env_file: .env
     environment: [ OTEL_SERVICE_NAME=payments ]
+    ports: [ "8002:8000" ]
     depends_on: [ collector ]
 
   askdocs:
