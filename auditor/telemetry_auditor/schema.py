@@ -63,6 +63,16 @@ SPAN_HTTP_URL = "httpUrl"
 SPAN_HAS_ERROR = "has_error"         # Bool; errors on health routes are KEPT (signal)
 SPAN_DURATION_NANO = "duration_nano"
 
+# Arbitrary (non-flattened) span attributes live in typed Maps on signoz_index_v3. gen_ai.*
+# keys land here: token counts in the number map, model/prompt/completion strings in the string
+# map. These are the standard v3/v4 column names; CONFIRM before the demo with
+# `introspect describe signoz_traces.signoz_index_v3` and update if this SigNoz build differs.
+# The gen_ai attribute KEYS themselves are pinned in llm_auditor/attrs.py (verified on a real
+# span); this only pins which ClickHouse Map column each type of value sits in.
+SPAN_ATTRS_STRING = "attributes_string"   # Map(String,String): gen_ai.request.model, messages
+SPAN_ATTRS_NUMBER = "attributes_number"   # Map(String,Float64): gen_ai.usage.*_tokens
+SPAN_ATTRS_BOOL = "attributes_bool"       # Map(String,Bool)
+
 # ─── Metrics columns ──────────────────────────────────────────────────────────
 TS_METRIC_NAME = "metric_name"       # LowCardinality(String)
 TS_FINGERPRINT = "fingerprint"       # UInt64; distinct count == active series (cardinality)

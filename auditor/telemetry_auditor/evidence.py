@@ -43,3 +43,9 @@ def traces_link(filter_expr: str) -> dict:
 def metrics_link(metric_name: str) -> dict:
     """Deep-link into Metrics Explorer for a metric (base name; SigNoz splits histograms)."""
     return _link(PATH_METRICS, f"metric_name = '{metric_name}'")
+
+
+def llm_spans_link(service: str = "askdocs", extra: str = "") -> dict:
+    """Deep-link into Traces Explorer for a service's gen_ai/LLM spans (L1/L2 evidence)."""
+    expr = f"service.name = '{service}'" + (f" AND {extra}" if extra else "")
+    return _link(PATH_TRACES, expr)

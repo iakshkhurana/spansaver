@@ -58,6 +58,15 @@ PROMPT_PREFIXES = ["gen_ai.input.messages", "gen_ai.prompt.", "llm.prompts."]
 COMPLETION_PREFIXES = ["gen_ai.output.messages", "gen_ai.completion.", "llm.completions."]
 
 
+# The confirmed key on THIS stack for each field (first entry of each list). ClickHouse detectors
+# read a specific Map cell, so they need one exact key string, not the fallback list — the
+# fallbacks matter only when parsing a live span dict via resolve_usage() below.
+MODEL_KEY = MODEL_KEYS[0]
+INPUT_TOKEN_KEY = INPUT_TOKEN_KEYS[0]
+OUTPUT_TOKEN_KEY = OUTPUT_TOKEN_KEYS[0]
+PROMPT_KEY = PROMPT_PREFIXES[0]          # "gen_ai.input.messages" — full request messages JSON
+
+
 def _first(attrs: dict, keys: list[str]):
     """Return (key, value) for the first candidate present, else (None, None)."""
     for k in keys:
