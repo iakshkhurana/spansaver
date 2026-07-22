@@ -145,7 +145,18 @@ class SpanSaverAPI {
     if (USE_MOCK) {
       await wait(900)
       const f = mockStore.find((x) => x.id === id.toUpperCase())
-      if (f) { f.status = 'verified'; f.verification = { id: f.id, after_recent_window: { signal: 'askdocs gen_ai calls', cacheable_repeats: 0, input_tokens: 900 }, integrity: { ok: true, dashboards_resolved: 3, alerts_resolved: 2 } } }
+      if (f) {
+        const isLlm = f.domain === 'llm'
+        const headline = isLlm
+          ? { metric: 'cacheable repeat calls', unit: 'repeats/min', kind: 'rate', before: 10, after: 0.4, drop_pct: 96 }
+          : { metric: 'debug-log ingest', unit: 'bytes/min', kind: 'rate', before: 34167, after: 1420, drop_pct: 95.8 }
+        const integrity = { ok: true, dashboards_resolved: 3, alerts_resolved: 2 }
+        f.status = 'verified'
+        f.verification = {
+          id: f.id, passed: true, threshold_drop_pct: 25, headline, integrity,
+          banner: `Verified: ${integrity.dashboards_resolved} dashboards and ${integrity.alerts_resolved} alerts intact — ${headline.metric} down ${Math.round(headline.drop_pct)}%.`,
+        }
+      }
       return { status: 'verified', verification: f?.verification }
     }
     return req<ActionResponse>(`/verify/${id}`, { method: 'POST' })

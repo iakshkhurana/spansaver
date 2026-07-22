@@ -11,7 +11,7 @@ import { statusClass } from '@/components/findings-table'
 import { api } from '@/lib/api'
 import { Finding } from '@/lib/types'
 import { moneyMo } from '@/lib/format'
-import { ArrowLeft, ShieldCheck, ShieldAlert, ExternalLink, Loader2, CheckCircle2 } from 'lucide-react'
+import { ArrowLeft, ArrowRight, ShieldCheck, ShieldAlert, ExternalLink, Loader2, CheckCircle2 } from 'lucide-react'
 
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -55,6 +55,69 @@ function Measured({ measured }: { measured: Record<string, unknown> }) {
         </div>
       ))}
     </div>
+  )
+}
+
+interface Verification {
+  passed?: boolean
+  banner?: string
+  threshold_drop_pct?: number
+  headline?: { metric: string; unit: string; kind: string; before: number; after: number; drop_pct: number }
+  integrity?: { ok: boolean; dashboards_resolved?: number; alerts_resolved?: number; error?: string }
+}
+
+const num = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 1 })
+
+function VerifyPanel({ ver }: { ver: Verification }) {
+  const passed = !!ver.passed
+  const h = ver.headline
+  const integ = ver.integrity
+  const good = passed // banner tone follows pass/fail
+  return (
+    <Panel title="Verification (before → after)">
+      {/* Green/red banner — the demo line, read live off real queries */}
+      <div className={`border rounded-md p-4 flex items-center gap-3 ${good ? 'border-primary/50 bg-primary/10' : 'border-destructive/50 bg-destructive/10'}`}>
+        {good ? <CheckCircle2 className="w-6 h-6 text-primary flex-shrink-0" /> : <ShieldAlert className="w-6 h-6 text-destructive flex-shrink-0" />}
+        <p className={`text-sm md:text-base font-bold ${good ? 'neon-green' : 'text-destructive'}`}>{ver.banner}</p>
+      </div>
+
+      {/* before → after for the headline signal */}
+      {h && (
+        <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] items-center gap-3 mt-3">
+          <div className="border border-primary/15 bg-card/40 rounded-md p-4 text-center">
+            <div className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">before</div>
+            <div className="text-2xl font-bold font-mono text-foreground">{num(h.before)}</div>
+            <div className="text-[10px] text-muted-foreground mt-1">{h.unit}</div>
+          </div>
+          <div className="flex flex-col items-center gap-1 px-2">
+            <ArrowRight className="w-5 h-5 text-primary" />
+            <span className={`text-xs font-bold font-mono ${h.drop_pct > 0 ? 'neon-green' : 'text-destructive'}`}>
+              {h.drop_pct > 0 ? '↓' : ''}{num(Math.abs(h.drop_pct))}%
+            </span>
+          </div>
+          <div className="border border-primary/40 bg-primary/5 rounded-md p-4 text-center">
+            <div className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">after</div>
+            <div className="text-2xl font-bold font-mono neon-green">{num(h.after)}</div>
+            <div className="text-[10px] text-muted-foreground mt-1">{h.unit}</div>
+          </div>
+        </div>
+      )}
+      {h && <p className="text-[11px] text-muted-foreground mt-2 font-mono text-center">{h.metric}</p>}
+
+      {/* integrity — nothing broke */}
+      {integ && (
+        <div className="mt-3 flex items-center gap-2 text-xs font-mono">
+          {integ.ok
+            ? <><ShieldCheck className="w-4 h-4 text-primary" /><span className="text-muted-foreground">{integ.dashboards_resolved ?? 0} dashboards · {integ.alerts_resolved ?? 0} alerts still resolve — nothing broke.</span></>
+            : <><ShieldAlert className="w-4 h-4 text-destructive" /><span className="text-destructive">integrity check failed: {integ.error}</span></>}
+        </div>
+      )}
+
+      <details className="group mt-3">
+        <summary className="text-[11px] text-muted-foreground cursor-pointer hover:text-primary">raw verification payload</summary>
+        <pre className="mt-2 p-3 bg-background/60 border border-primary/10 rounded text-[11px] font-mono text-muted-foreground overflow-x-auto whitespace-pre-wrap">{JSON.stringify(ver, null, 2)}</pre>
+      </details>
+    </Panel>
   )
 }
 
@@ -171,14 +234,7 @@ export default function LeakDetail() {
           ))}
         </Panel>
 
-        {ver && (
-          <Panel title="Verification (after apply)">
-            <div className="border border-primary/40 bg-primary/5 rounded-md p-4 space-y-2">
-              <div className="flex items-center gap-2 text-primary font-bold text-sm"><CheckCircle2 className="w-4 h-4" /> re-measured on the live stack</div>
-              <pre className="text-[11px] font-mono text-muted-foreground overflow-x-auto whitespace-pre-wrap">{JSON.stringify(ver, null, 2)}</pre>
-            </div>
-          </Panel>
-        )}
+        {ver && <VerifyPanel ver={ver as Verification} />}
 
         <ActionBar finding={f} isLoading={acting}
           onApply={() => act(api.applyFinding)} onVerify={() => act(api.verifyFinding)} onUnapply={() => act(api.unapplyFinding)}>
