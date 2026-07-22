@@ -9,6 +9,7 @@ look them up. Everything fails loud with an actionable message (golden rule #7).
 from __future__ import annotations
 
 import os
+import time
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -124,6 +125,7 @@ def apply(finding_id: str) -> dict:
     except (collector_ctl.CollectorControlError, askdocs_ctl.AskdocsControlError) as e:
         raise HTTPException(status_code=502, detail=str(e))
     f.status = Status.APPLIED
+    f.applied_at = time.time()  # lets verify measure the after-window as time-since-apply
     return {"status": f.status.value, **result}
 
 
@@ -140,6 +142,8 @@ def unapply(finding_id: str) -> dict:
         raise HTTPException(status_code=502, detail=str(e))
     if f is not None:
         f.status = Status.FIX_READY
+        f.applied_at = 0.0
+        f.verification = {}
     return {"status": "unapplied", **result}
 
 
