@@ -118,23 +118,37 @@ cache reads, and cacheable duplicates, all from real gen_ai spans. Import via th
 
 ## Architecture
 
-```
-   victim-stack            our collector              SigNoz
- ┌────────────┐        ┌──────────────────┐      ┌──────────────┐
- │  orders    │        │  baseline.yaml   │      │  ClickHouse  │
- │  payments  │──OTLP──▶│  + applied       │─OTLP─▶│  + REST API  │
- │  askdocs🧠 │        │    patches/*.yaml │      └──────┬───────┘
- └────────────┘        └──────────────────┘             │
-                                ▲  reload           reads │ writes patches
-                                │                   ┌─────┴───────┐
-                                └───────────────────│   auditor   │
-                                                    │  (FastAPI)  │
-                                                    └─────┬───────┘
-                                        Findings (REST)  │
-                                                    ┌─────▼───────┐
-                                                    │Mission Ctrl │
-                                                    │  (Next.js)  │
-                                                    └─────────────┘
+```mermaid
+flowchart LR
+  subgraph VS[victim-stack]
+    O[orders]
+    P[payments]
+    A[askdocs · LLM/RAG]
+  end
+  subgraph COL[OTel Collector]
+    direction TB
+    B[baseline.yaml]
+    PD["+ applied patches/*.yaml"]
+  end
+  subgraph SZ[SigNoz self-host]
+    CH[(ClickHouse)]
+    API["REST API<br/>dashboards · alerts"]
+  end
+  subgraph AUD[Auditor · FastAPI]
+    direction TB
+    DET[detectors]
+    FIX[fixgen]
+    VER[verifier]
+  end
+  MC["Mission Control<br/>Next.js console + terminal"]
+
+  VS -->|OTLP| COL -->|OTLP| SZ
+  DET -->|read volumes| CH
+  DET -->|read dashboards / alerts| API
+  FIX -->|write validated patch| PD
+  AUD -->|reload| COL
+  VER -->|re-measure before/after| CH
+  MC <-->|REST poll| AUD
 ```
 
 The auditor reads ClickHouse + the SigNoz API, emits **Findings** (measured volume · 30-day cost
