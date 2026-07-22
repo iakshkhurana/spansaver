@@ -62,11 +62,24 @@ def _t3_patch(f: Finding) -> dict:
 
 def _t4_patch(f: Finding) -> dict:
     """T4 is NOT a drop — it removes the high-cardinality label from each flagged metric via the
-    transform processor (delete_key), collapsing series while keeping the metric and its data."""
+    transform processor (delete_key), collapsing series while keeping the metric and its data.
+
+    The collector sees a histogram as ONE metric (e.g. `checkout_latency_ms`); SigNoz only splits
+    it into `.count/.sum/.bucket` at ClickHouse storage time. So we match on the BASE name — a
+    `metric.name == "checkout_latency_ms.count"` clause would never fire in the pipeline."""
     bombs = f.measured.get("bombs") or [{"metric": f.measured.get("metric"),
                                          "bomb_key": f.measured.get("bomb_key")}]
-    stmts = [f'delete_key(attributes, "{b["bomb_key"]}") where metric.name == "{b["metric"]}"'
-             for b in bombs if b.get("metric") and b.get("bomb_key")]
+    seen = set()
+    stmts = []
+    for b in bombs:
+        metric, key = b.get("metric"), b.get("bomb_key")
+        if not (metric and key):
+            continue
+        base = schema.metric_base_name(metric)
+        if (base, key) in seen:  # dedupe when multiple histogram components share a base + key
+            continue
+        seen.add((base, key))
+        stmts.append(f'delete_key(attributes, "{key}") where metric.name == "{base}"')
     return {
         "processors": {_transform_name("T4"): {
             "error_mode": "ignore",

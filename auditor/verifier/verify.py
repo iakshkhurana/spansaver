@@ -153,7 +153,13 @@ def _t4_current(ch: ClickHouse, finding: Finding, win_sec: int) -> dict:
     """
     series_now, series_with_key = ch.query(sql)[0]
     series_now, series_with_key = int(series_now), int(series_with_key)
-    share = (100.0 * series_with_key / series_now) if series_now else 0.0
+    if series_now == 0:
+        # No post-apply series observed yet — we CANNOT confirm the label was dropped. Report the
+        # worst case (100% still carrying it) so the verify does not falsely pass on empty data,
+        # with a note to re-verify once more of the metric has flowed. Honesty > a green banner.
+        return {"series_now": 0, "series_carrying_key": 0, "key_share_pct": 100.0,
+                "note": "no post-apply series in the window yet — keep traffic on and re-verify"}
+    share = 100.0 * series_with_key / series_now
     return {"series_now": series_now, "series_carrying_key": series_with_key,
             "key_share_pct": round(share, 1)}
 
