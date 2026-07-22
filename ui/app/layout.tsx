@@ -3,8 +3,8 @@ import type { Metadata, Viewport } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'SpanSaver Mission Control',
-  description: 'Terminal-based observability dashboard for analyzing and fixing performance issues',
+  title: 'SpanSaver — Telemetry & LLM Waste Auditor',
+  description: 'Detect, prove safe, fix, and verify money leaking from your observability + LLM stack.',
   generator: 'v0.app',
   icons: {
     icon: [
@@ -28,7 +28,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   colorScheme: 'dark',
   themeColor: [
-    { media: '(prefers-color-scheme: dark)', color: '#0a190f' },
+    { media: '(prefers-color-scheme: dark)', color: '#09090b' },
   ],
   userScalable: true,
 }
@@ -40,7 +40,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="bg-background">
-      <body className="bg-background text-foreground font-mono antialiased">
+      <body className="bg-background text-foreground antialiased">
         {children}
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>

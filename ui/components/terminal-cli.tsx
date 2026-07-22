@@ -112,33 +112,39 @@ export function TerminalCLI({ findings, onRefresh }: Props) {
 
   const lineClass = (l: string) =>
     l.startsWith('  ✓') ? 'text-secondary' : l.startsWith('  ✗') ? 'text-destructive'
-    : l.startsWith('$') ? 'text-primary neon-cyan' : l === 'COMMANDS' || /^[A-Z]/.test(l.trim()) && l.startsWith('  ID') ? 'text-accent'
-    : 'text-foreground'
+    : l.startsWith('$') ? 'text-primary' : (l === 'COMMANDS' || l.startsWith('  ID')) ? 'text-accent'
+    : 'text-muted-foreground'
 
   return (
-    <div className="cyber-card overflow-hidden flex flex-col h-96 border-2 shadow-2xl shadow-primary/10" onClick={() => inputRef.current?.focus()}>
-      <div className="bg-gradient-to-r from-primary/15 to-secondary/10 border-b border-primary/30 px-4 py-2 flex items-center justify-between">
+    <div className="mono overflow-hidden flex flex-col h-full min-h-[22rem] rounded-xl border border-primary/25 bg-card ring-1 ring-primary/10 shadow-[0_0_60px_-18px_rgba(56,189,248,0.35)]"
+      onClick={() => inputRef.current?.focus()}>
+      <div className="border-b border-primary/15 px-4 py-2.5 flex items-center justify-between bg-primary/[0.06]">
         <div className="flex items-center gap-2">
-          <span className={`w-2 h-2 rounded-full ${busy ? 'bg-accent' : 'bg-secondary'} animate-pulse`} />
-          <span className="text-xs font-bold neon-cyan tracking-widest">CONTROL_CONSOLE</span>
+          <span className="w-3 h-3 rounded-full bg-[#ff5f57]" />
+          <span className="w-3 h-3 rounded-full bg-[#febc2e]" />
+          <span className="w-3 h-3 rounded-full bg-[#28c840]" />
+          <span className="ml-2 text-[11px] text-primary/90 tracking-wide">auditor://console</span>
         </div>
-        <span className="text-xs text-muted-foreground">spansaver@auditor</span>
+        <span className={`flex items-center gap-1.5 text-[10px] tracking-widest uppercase ${busy ? 'text-accent' : 'text-secondary'}`}>
+          <span className={`w-1.5 h-1.5 rounded-full ${busy ? 'bg-accent' : 'bg-secondary'}`} />
+          {busy ? 'running' : 'ready'}
+        </span>
       </div>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 bg-gradient-to-b from-card/40 to-card/60 scan-line">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto thin-scroll p-4 dot-grid">
         {lines.map((l, i) => (
-          <div key={i} className={`text-xs font-mono whitespace-pre-wrap break-words leading-relaxed ${lineClass(l)}`}>{l || ' '}</div>
+          <div key={i} className={`text-[12px] whitespace-pre-wrap break-words leading-relaxed ${lineClass(l)}`}>{l || ' '}</div>
         ))}
       </div>
 
-      <div className="border-t border-primary/30 p-3 flex items-center gap-2 bg-gradient-to-r from-primary/10 to-secondary/5">
-        <span className="text-primary text-sm font-bold neon-cyan">➜</span>
-        <span className="text-muted-foreground text-xs font-mono">spansaver</span>
+      <div className="border-t border-primary/15 px-4 py-3 flex items-center gap-2 bg-primary/[0.04]">
+        <span className="text-primary text-sm">➜</span>
+        <span className="text-muted-foreground text-xs">spansaver</span>
         <input ref={inputRef} value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={onKey}
-          disabled={busy} autoFocus spellCheck={false}
-          className="flex-1 bg-transparent outline-none text-xs text-foreground font-mono placeholder-muted-foreground/40 ml-1"
-          placeholder={busy ? 'working…' : 'type a command — help'} />
-        <span className="text-primary text-xs blink font-bold">▮</span>
+          disabled={busy} spellCheck={false}
+          style={{ caretColor: 'rgb(56 189 248)' }}
+          className="flex-1 bg-transparent outline-none text-xs text-foreground placeholder-muted-foreground/50 ml-1"
+          placeholder={busy ? 'working…' : 'type a command — try: help'} />
       </div>
     </div>
   )

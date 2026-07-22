@@ -21,39 +21,41 @@ export function Header() {
     return () => { alive = false; clearInterval(t) }
   }, [])
 
-  const navLink = (href: string, label: string) => (
+  const navLink = (href: string, sigil: string, label: string) => (
     <Link href={href}
-      className={`px-4 py-2 text-xs tracking-wide rounded-md transition-all duration-200 ${
+      className={`mono px-3 py-1.5 text-xs tracking-wide rounded-md transition-colors ${
         isActive(href)
-          ? 'text-primary neon-cyan bg-primary/15 border border-primary/40'
-          : 'text-muted-foreground hover:text-primary/80 hover:bg-primary/5'
+          ? 'text-foreground bg-white/[0.06]'
+          : 'text-muted-foreground hover:text-foreground hover:bg-white/[0.03]'
       }`}>
-      {label}
+      <span className="text-primary mr-1.5">{sigil}</span>{label}
     </Link>
   )
 
   return (
-    <header className="border-b border-primary/20 bg-background/60 backdrop-blur-xl sticky top-0 z-40 scan-line">
-      <div className="container mx-auto px-6 py-3 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-3 group">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-secondary/50 flex items-center justify-center text-xs font-bold text-primary-foreground group-hover:shadow-lg group-hover:shadow-primary/50 transition-all">
-            {'>_'}
-          </div>
-          <div className="flex flex-col leading-tight">
-            <span className="text-sm font-bold neon-cyan tracking-widest">SPANSAVER</span>
-            <span className="text-[10px] text-muted-foreground tracking-wider">telemetry &amp; llm waste auditor</span>
-          </div>
-        </Link>
+    <header className="border-b border-border bg-background/70 backdrop-blur-xl sticky top-0 z-40">
+      <div className="container mx-auto px-6 h-16 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-8">
+          <Link href="/" className="flex items-center gap-2.5 group">
+            <div className="w-8 h-8 rounded-lg border border-border bg-white/[0.03] flex items-center justify-center group-hover:border-primary/60 transition-colors">
+              <span className="mono text-primary text-sm font-bold">{'>_'}</span>
+            </div>
+            <div className="flex items-baseline gap-2">
+              <span className="text-base font-bold tracking-tight text-foreground">SpanSaver</span>
+              <span className="mono hidden sm:inline text-[10px] text-muted-foreground uppercase tracking-[0.2em]">waste auditor</span>
+            </div>
+          </Link>
 
-        <nav className="hidden md:flex items-center gap-1">
-          {navLink('/', 'Mission Control')}
-          {navLink('/judge', 'Judge Mode')}
-        </nav>
+          <nav className="hidden md:flex items-center gap-1">
+            {navLink('/', '>', 'Mission Control')}
+            {navLink('/judge', '@', 'Judge Mode')}
+          </nav>
+        </div>
 
-        <div className="flex items-center gap-2 text-xs font-mono">
-          <span className={`w-1.5 h-1.5 rounded-full ${online === false ? 'bg-destructive' : 'bg-secondary animate-pulse'}`} />
-          <span className={online === false ? 'text-destructive' : 'text-secondary'}>
-            {online === null ? 'CONNECTING' : online ? 'ONLINE' : 'OFFLINE'}
+        <div className="mono flex items-center gap-2 text-[11px] tracking-wide px-3 py-1.5 rounded-full border border-border bg-white/[0.02]">
+          <span className={`live-dot w-1.5 h-1.5 rounded-full ${online === false ? 'bg-destructive text-destructive' : 'bg-secondary text-secondary'}`} />
+          <span className={online === false ? 'text-destructive' : 'text-muted-foreground'}>
+            {online === null ? 'CONNECTING' : online ? 'AUDITOR ONLINE' : 'AUDITOR OFFLINE'}
           </span>
         </div>
       </div>
