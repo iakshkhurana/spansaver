@@ -75,19 +75,22 @@ demo victim-stack under load:
 
 | ID | Leak | Signal detected | Generated fix |
 |----|------|-----------------|---------------|
-| **T1** | Debug-log flood | `orders` DEBUG = **94.8%** of its log bytes | scoped filter: drop `severity < INFO` for the flagged service |
+| **T1** | Debug-log flood | `orders` DEBUG = **94% of its log bytes** | scoped filter: drop `severity < INFO` for the flagged service |
 | **T2** | Orphan metrics | **7** metrics referenced by **0** dashboards / **0** alerts | drop-list filter on exact metric names |
-| **T3** | Health-check span spam | `/healthz` probes = **54% of all trace ingest**, 0 errors | route filter — error-status probes **kept** as signal |
+| **T3** | Health-check span spam | `/healthz` probes = **66% of all trace ingest**, 0 errors | route filter — error-status probes **kept** as signal |
+| **T4** | Cardinality bomb | one per-user `user_id` label exploded `checkout_latency_ms` to **thousands of series** | `transform`/`delete_key` — drop just that label, **keep the metric** |
 
 ```bash
-make audit           # detect T1–T3 → volume, cost, deep-link, safety proof, staged patch
+make audit           # detect T1–T4 → volume, cost, deep-link, safety proof, staged patch
 make apply   F=T1    # promote the validated patch + reload the collector
-make verify  F=T1    # re-measure + dashboard/alert integrity sweep
+make verify  F=T1    # before/after windows + dashboard/alert integrity sweep
 make unapply F=T1    # reverse it — fully reversible
+make demo            # the whole detect→prove→fix→verify loop, hands-free (rehearsal)
 ```
 
-> **Proof it works:** applying **T1** drops `orders` DEBUG logs **142 → 0** in SigNoz while INFO
-> keeps flowing. The waste stops; nothing you rely on breaks.
+> **Proof it works:** applying **T1** drops `orders` DEBUG-log ingest **down 100%** in the
+> after-window while INFO keeps flowing, and the verify's integrity sweep confirms every
+> dashboard and alert still resolves. The waste stops; nothing you rely on breaks.
 
 **LLM auditor — mined from `askdocs` gen_ai spans (Traceloop/OpenLLMetry).** Same lifecycle,
 different domain; the fix is a live config flip on the running service, not a collector patch.
@@ -103,9 +106,9 @@ make apply   F=L1    # flips askdocs' cache on live — token graph steps down i
 make verify  F=L1    # re-measures gen_ai calls/tokens + cacheable repeats -> ~0
 ```
 
-**Mission Control (Next.js) — phosphor-terminal UI.** Run an audit, inspect any leak's money math,
-safety proof, fix diff, and SigNoz evidence deep-link, then apply → verify → unapply — from the
-report page, or from the built-in command console. `make ui` (config in `ui/.env.example`).
+**Mission Control (Next.js) — refined black-console UI.** Run an audit, inspect any leak's money
+math, safety proof, fix diff, and SigNoz evidence deep-link, then apply → verify → unapply — from
+the report page, or from the working front terminal. `make ui` (config in `ui/.env.example`).
 
 **Agent Ops dashboard** — `dashboards/agent-ops.json`: LLM tokens/calls, prompt-size p50/p95,
 cache reads, and cacheable duplicates, all from real gen_ai spans. Import via the SigNoz UI
@@ -146,10 +149,12 @@ collector reloads, and the verifier confirms the drop with real metrics.
 
 ```bash
 cp .env.example .env      # set SIGNOZ_API_KEY (admin) and confirm CLICKHOUSE_DSN host
-make up                   # collector + orders + payments + askdocs
+make up                   # collector + orders + payments + askdocs + auditor
 make waste-on             # arm the WASTE_* toggles
 make traffic              # load generator — leave running ~10 min
 make audit                # then open Mission Control, click Apply, watch the graphs
+make demo                 # or: run the whole detect→prove→fix→verify loop hands-free
+make ui                   # Mission Control at localhost:3000 (black console + live terminal)
 ```
 
 Prices are configurable assumptions in `.env` and are **labeled "assumed rate"** everywhere in
@@ -162,7 +167,7 @@ the UI. Every other number is measured.
 | | Domain | Status |
 |---|--------|--------|
 | **T1–T3** | Telemetry: debug flood, orphan metrics, health-span spam | ✅ live (detect → apply → verify) |
-| **T4** | Telemetry: cardinality bomb (aggregate-away, not label-drop) | 🔜 |
+| **T4** | Telemetry: cardinality bomb — drop the offending label (OTTL `delete_key`), keep the metric | ✅ live (detect → apply → verify) |
 | **L1–L2** | LLM: cacheable duplicates, prompt bloat | ✅ live (detect → apply → verify) |
 | **L3–L4** | LLM: retry storms, model overkill (recommend-only) | 🗺️ catalogued |
 | **Mission Control** | Report · leak detail · live status · command console · Judge Mode | ✅ live |

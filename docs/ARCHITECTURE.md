@@ -11,9 +11,9 @@
               ┌────────────────┴──────┐    ┌───────┴────────────────┐
               │   OTel Collector      │    │   Auditor (FastAPI)    │
               │ baseline + patches/   │◄───┤ detectors · fixgen ·   │
-              │ (reloadable)          │apply│ verifier · SSE        │
+              │ (reloadable)          │apply│ verifier               │
               └───────▲───────────────┘    └───────▲────────────────┘
-        OTLP          │                            │ REST + SSE
+        OTLP          │                            │ REST (UI polls)
    ┌──────────────────┴─────────────┐      ┌───────┴────────────────┐
    │ victim-stack                   │      │ Mission Control (Next) │
    │ orders · payments · askdocs(LLM)│      │  /  /leak/[id]  /judge │

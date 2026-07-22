@@ -43,7 +43,7 @@ scripts/          traffic generator, waste seeding, helpers
 docs/             THE SPEC. Read docs/LEAK-CATALOG.md before touching auditor code.
 ```
 Data flow: victim-stack → OTel Collector → SigNoz. Auditor reads SigNoz API + ClickHouse,
-emits Findings over SSE to the UI, writes patches, triggers collector reload, verifies.
+emits Findings over a REST API (the UI polls), writes patches, triggers collector reload, verifies.
 
 ## Commands
 ```
