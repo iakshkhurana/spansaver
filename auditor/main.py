@@ -23,6 +23,8 @@ from auditor.telemetry_auditor import collector_ctl
 from auditor.telemetry_auditor.clickhouse import ClickHouse, ClickHouseUnavailable
 from auditor.telemetry_auditor.detectors import run as run_detectors
 from auditor.telemetry_auditor.findings import Finding, Status
+from auditor.llm_auditor.explainer import ExplainerError
+from auditor.llm_auditor.explainer import explain as explain_finding
 from auditor.telemetry_auditor.signoz_api import SigNozAPI, SigNozAPIError
 from auditor.verifier.verify import verify as verify_finding
 
@@ -145,6 +147,19 @@ def unapply(finding_id: str) -> dict:
         f.applied_at = 0.0
         f.verification = {}
     return {"status": "unapplied", **result}
+
+
+@app.post("/explain/{finding_id}")
+def explain(finding_id: str) -> dict:
+    """The auditor's OWN LLM call: a real, Traceloop-instrumented request that explains the finding
+    in plain English. Its gen_ai spans land in SigNoz (service spansaver-auditor) — this is how
+    SpanSaver audits its own AI cost. Fails loud (502) on missing key / SDK / unreachable collector."""
+    f = _get(finding_id)
+    try:
+        result = explain_finding(f)
+    except ExplainerError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    return {"id": f.id, "explanation": result}
 
 
 @app.post("/verify/{finding_id}")

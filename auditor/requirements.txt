@@ -7,3 +7,9 @@ clickhouse-driver>=0.2.7,<0.3   # native-protocol ClickHouse access (port 9000)
 python-dotenv>=1.0,<2.0    # host-side .env loading for CLI runs
 PyYAML>=6.0,<7.0           # fixgen reads/writes collector patch YAML
 docker>=7.0,<8.0           # restart the collector container on apply/unapply
+# The auditor's OWN LLM call (POST /explain): a real Claude request, traced into SigNoz via
+# Traceloop so "SpanSaver audits its own AI cost" is literally true (spans land in Agent Ops).
+openai                     # explainer LLM call when LLM_PROVIDER=openai (default for this stack)
+anthropic>=0.40            # explainer LLM call when LLM_PROVIDER=anthropic
+traceloop-sdk              # OpenLLMetry: auto-instruments whichever client is used → gen_ai spans
+opentelemetry-exporter-otlp  # export those spans to OUR collector (OTEL_EXPORTER_OTLP_ENDPOINT)
