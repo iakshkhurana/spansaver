@@ -48,6 +48,8 @@ class Finding:
     fix: dict = field(default_factory=dict)  # non-collector fixes (e.g. L1 config diff): {kind,
     #                                          diff, apply, note, path} — UI renders the diff
     verification: dict = field(default_factory=dict)  # before/after, set by verifier
+    applied_at: float = 0.0       # unix ts set at /apply; lets verify measure the after-window as
+    #                               time-since-apply (excludes stale pre-apply data from the drop)
     error: str = ""               # populated iff status == FAILED
 
     def add_evidence(self, ev: Evidence) -> "Finding":

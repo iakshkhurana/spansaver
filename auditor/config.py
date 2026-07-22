@@ -93,6 +93,9 @@ class Settings:
     # Windows
     audit_window_hours: int = field(default_factory=lambda: _i("AUDIT_WINDOW_HOURS", 24))
     verify_window_minutes: int = field(default_factory=lambda: _i("VERIFY_WINDOW_MINUTES", 10))
+    # A verify PASSES only if the leaked signal's rate dropped at least this much AND every
+    # dashboard/alert still resolves. Env-overridable so thin demo data and prod both work.
+    verify_min_drop_pct: float = field(default_factory=lambda: _f("VERIFY_MIN_DROP_PCT", 25.0))
 
     auditor_port: int = field(default_factory=lambda: _i("AUDITOR_PORT", 8100))
 
