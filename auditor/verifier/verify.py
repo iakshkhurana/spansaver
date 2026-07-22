@@ -134,7 +134,31 @@ def _l2_current(ch: ClickHouse, finding: Finding, win_sec: int) -> dict:
             "min_input_tokens": round(float(min_in or 0), 1)}
 
 
-_CURRENT = {"T1": _t1_current, "T2": _t2_current, "T3": _t3_current,
+def _t4_current(ch: ClickHouse, finding: Finding, win_sec: int) -> dict:
+    """T4 after-apply signal: of the metric's active series in the after-window, what share still
+    carry the high-cardinality label. Window-robust — a dropped label is simply absent (100%->0%),
+    unlike a raw series count which shrinks just because the window is short."""
+    metric = finding.measured.get("metric", "")
+    key = finding.measured.get("bomb_key", "")
+    sql = f"""
+        SELECT count() AS series_now,
+               countIf(mapContains({schema.TS_ATTRS}, '{key}')) AS series_with_key
+        FROM (
+            SELECT any({schema.TS_ATTRS}) AS {schema.TS_ATTRS}
+            FROM {schema.T_TIME_SERIES}
+            WHERE {schema.TS_METRIC_NAME} = '{metric}'
+              AND {schema.TS_UNIX_MILLI} >= toUnixTimestamp(now() - INTERVAL {win_sec} SECOND) * 1000
+            GROUP BY {schema.TS_FINGERPRINT}
+        )
+    """
+    series_now, series_with_key = ch.query(sql)[0]
+    series_now, series_with_key = int(series_now), int(series_with_key)
+    share = (100.0 * series_with_key / series_now) if series_now else 0.0
+    return {"series_now": series_now, "series_carrying_key": series_with_key,
+            "key_share_pct": round(share, 1)}
+
+
+_CURRENT = {"T1": _t1_current, "T2": _t2_current, "T3": _t3_current, "T4": _t4_current,
             "L1": _l1_current, "L2": _l2_current}
 
 # How to turn a finding's before (measured) + after (current) into one headline number.
@@ -147,6 +171,8 @@ _HEADLINE = {
            "before_key": "total_datapoints_window", "after_key": "datapoints"},
     "T3": {"metric": "health-check spans", "unit": "spans/min", "kind": "rate",
            "before_key": "health_ok_spans", "after_key": "health_ok_spans"},
+    "T4": {"metric": "series carrying the high-card label", "unit": "% of series", "kind": "level",
+           "before_key": "key_share_baseline_pct", "after_key": "key_share_pct"},
     "L1": {"metric": "cacheable repeat calls", "unit": "repeats/min", "kind": "rate",
            "before_key": "total_repeats", "after_key": "cacheable_repeats"},
     "L2": {"metric": "input tokens / request", "unit": "tokens", "kind": "level",

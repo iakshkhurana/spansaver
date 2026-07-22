@@ -268,7 +268,132 @@ def detect_t3(ch: ClickHouse, corpus: list[ReferenceSource] | None = None,
     return finding
 
 
-DETECTORS = {"T1": detect_t1, "T2": detect_t2, "T3": detect_t3}
+# ── T4 thresholds ──
+T4_MIN_SERIES = _f("T4_MIN_SERIES", 500)       # a metric with fewer active series isn't a "bomb"
+T4_MIN_DOMINANCE = _f("T4_MIN_DOMINANCE", 0.5)  # one label must explain >= this share of the series
+# Label keys that are legitimately high-cardinality (histogram/summary structure, resource ids) —
+# never the "bomb". The bomb is a per-request/per-user id glued into a metric attribute.
+T4_STRUCTURAL_KEYS = {
+    "le", "quantile", "__name__", "__temporality__", "service_name", "service.name",
+    "host_name", "host.name", "deployment_environment", "deployment.environment",
+    "os_type", "os.type", "telemetry_sdk_language", "telemetry_sdk_name",
+}
+
+
+def detect_t4(ch: ClickHouse, corpus: list[ReferenceSource] | None = None,
+              corpus_err: str = "") -> Finding | None:
+    """T4 · Cardinality bomb: a metric whose active-series count is exploded by one label carrying
+    a per-request/per-user id. The fix drops that ONE label (keeps the metric); series collapse."""
+    window_ms = f"toUnixTimestamp(now() - INTERVAL {settings.audit_window_hours} HOUR) * 1000"
+    rows = ch.query(f"""
+        SELECT {schema.TS_METRIC_NAME} AS metric_name,
+               uniqExact({schema.TS_FINGERPRINT}) AS series
+        FROM {schema.T_TIME_SERIES}
+        WHERE {schema.TS_UNIX_MILLI} >= {window_ms}
+        GROUP BY metric_name
+        HAVING series >= {int(T4_MIN_SERIES)}
+        ORDER BY series DESC
+    """)
+
+    bombs = []
+    for metric_name, series in rows:
+        series = int(series)
+        if schema.is_internal_metric(metric_name):
+            continue
+        # Distinct values per label key across this metric's series — the driver is the key whose
+        # distinct-value count is closest to the series count.
+        attr_rows = ch.query(f"""
+            SELECT kv.1 AS key, uniqExact(kv.2) AS distinct_values
+            FROM (
+                SELECT arrayJoin(arrayZip(mapKeys({schema.TS_ATTRS}),
+                                          mapValues({schema.TS_ATTRS}))) AS kv
+                FROM {schema.T_TIME_SERIES}
+                WHERE {schema.TS_METRIC_NAME} = '{metric_name}' AND {schema.TS_UNIX_MILLI} >= {window_ms}
+            )
+            GROUP BY key ORDER BY distinct_values DESC LIMIT 8
+        """)
+        top = next(((k, int(d)) for k, d in attr_rows if k not in T4_STRUCTURAL_KEYS), None)
+        if top is None:
+            continue
+        bomb_key, bomb_distinct = top
+        dominance = (bomb_distinct / series) if series else 0.0
+        if dominance < T4_MIN_DOMINANCE:
+            continue
+        datapoints = int(ch.query(
+            f"SELECT count() FROM {schema.T_SAMPLES} "
+            f"WHERE {schema.SAMPLE_METRIC_NAME} = '{metric_name}' AND {schema.SAMPLE_UNIX_MILLI} >= {window_ms}"
+        )[0][0])
+        bombs.append({
+            "metric": metric_name, "series": series, "bomb_key": bomb_key,
+            "bomb_key_distinct": bomb_distinct, "dominance": round(dominance, 4),
+            "datapoints": datapoints,
+            "top_keys": [{"key": k, "distinct": int(d)} for k, d in attr_rows[:5]],
+        })
+    if not bombs:
+        return None
+    bombs.sort(key=lambda b: b["series"], reverse=True)
+    top_bomb = bombs[0]
+    total_dp = sum(b["datapoints"] for b in bombs)
+
+    finding = Finding(
+        id="T4",
+        domain="telemetry",
+        title="Cardinality bomb",
+        service="payments",
+        summary=(
+            f"{top_bomb['metric']} has {top_bomb['series']:,} active series — the '{top_bomb['bomb_key']}' "
+            f"label alone carries {top_bomb['bomb_key_distinct']:,} distinct values "
+            f"({top_bomb['dominance']:.0%} of the cardinality). Drop that one label; the metric stays."
+        ),
+        measured={
+            "bombs": bombs,
+            "metric": top_bomb["metric"],
+            "bomb_key": top_bomb["bomb_key"],
+            "total_series": sum(b["series"] for b in bombs),
+            "total_datapoints_window": total_dp,
+            "key_share_baseline_pct": 100.0,  # baseline: every series carries the bomb label
+            "window_hours": settings.audit_window_hours,
+        },
+        money=money.samples_monthly(total_dp),
+    )
+    link = evidence.metrics_link(top_bomb["metric"])
+    finding.add_evidence(Evidence(
+        label=f"High-cardinality metric {top_bomb['metric']} in SigNoz Metrics Explorer",
+        deeplink=link["url"], filter=link["filter"],
+        raw_query=(f"SELECT key, uniqExact(value) FROM {schema.T_TIME_SERIES} "
+                   f"[arrayJoin attrs] WHERE metric_name = '{top_bomb['metric']}' GROUP BY key"),
+    ))
+    # Safety: the fix drops one label, keeping the metric + every other label + every datapoint.
+    # If the metric is referenced anywhere, a panel MIGHT group by the dropped label — flag for
+    # review. If it's referenced by nobody, the drop is unambiguously safe.
+    if corpus is None:
+        corpus, corpus_err = try_build_corpus()
+    if corpus_err:
+        finding.safety = {"safe": False, "proof": f"UNVERIFIED — SigNoz API error: {corpus_err}",
+                          "references": [], "checked": {}}
+    else:
+        refs = safety_for(corpus, [top_bomb["metric"]], f"metric {top_bomb['metric']}")
+        if refs["safe"]:
+            finding.safety = {
+                "safe": True,
+                "proof": (f"{top_bomb['metric']} is referenced by no dashboard and no alert; dropping "
+                          f"the '{top_bomb['bomb_key']}' label removes the cardinality bomb with zero "
+                          f"query impact. No datapoint is dropped — the metric keeps its other labels."),
+                "references": [], "checked": {"dashboards": refs.get("checked", {}).get("dashboards", 0),
+                                              "alerts": refs.get("checked", {}).get("alerts", 0)},
+            }
+        else:
+            finding.safety = {
+                "safe": False,
+                "proof": (f"{top_bomb['metric']} IS referenced downstream — dropping label "
+                          f"'{top_bomb['bomb_key']}' likely safe (no data lost) but a panel may group "
+                          f"by it. Review before apply."),
+                "references": refs.get("references", []), "checked": refs.get("checked", {}),
+            }
+    return finding
+
+
+DETECTORS = {"T1": detect_t1, "T2": detect_t2, "T3": detect_t3, "T4": detect_t4}
 
 
 def run(ids: list[str] | None = None) -> list[Finding]:

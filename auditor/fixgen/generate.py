@@ -26,6 +26,10 @@ def _proc_name(fid: str) -> str:
     return f"filter/spansaver_{fid.lower()}"
 
 
+def _transform_name(fid: str) -> str:
+    return f"transform/spansaver_{fid.lower()}"
+
+
 def _t1_patch(f: Finding) -> dict:
     services = [s["service"] for s in f.measured.get("services", [])] or ([f.service] if f.service else [])
     svc_clause = " or ".join(f'resource.attributes["service.name"] == "{s}"' for s in services)
@@ -56,7 +60,23 @@ def _t3_patch(f: Finding) -> dict:
     }
 
 
-_BUILDERS = {"T1": _t1_patch, "T2": _t2_patch, "T3": _t3_patch}
+def _t4_patch(f: Finding) -> dict:
+    """T4 is NOT a drop — it removes the high-cardinality label from each flagged metric via the
+    transform processor (delete_key), collapsing series while keeping the metric and its data."""
+    bombs = f.measured.get("bombs") or [{"metric": f.measured.get("metric"),
+                                         "bomb_key": f.measured.get("bomb_key")}]
+    stmts = [f'delete_key(attributes, "{b["bomb_key"]}") where metric.name == "{b["metric"]}"'
+             for b in bombs if b.get("metric") and b.get("bomb_key")]
+    return {
+        "processors": {_transform_name("T4"): {
+            "error_mode": "ignore",
+            "metric_statements": [{"context": "datapoint", "statements": stmts}],
+        }},
+        "service": {"pipelines": {"metrics": {"processors": [_transform_name("T4")]}}},
+    }
+
+
+_BUILDERS = {"T1": _t1_patch, "T2": _t2_patch, "T3": _t3_patch, "T4": _t4_patch}
 
 
 def _pipeline_key_for(patch: dict) -> str:
@@ -64,18 +84,25 @@ def _pipeline_key_for(patch: dict) -> str:
 
 
 def validate_patch(patch: dict, fid: str) -> None:
-    """Structural validation: processor defined, referenced in exactly one pipeline, has conditions."""
-    pname = _proc_name(fid)
+    """Structural validation: the SpanSaver processor is defined, wired into exactly one pipeline,
+    and carries real work (drop conditions for a filter, OTTL statements for a transform)."""
     procs = patch.get("processors", {})
-    if pname not in procs:
-        raise ValueError(f"{fid}: patch does not define processor {pname}")
+    pname = next((n for n in procs if n.endswith(f"spansaver_{fid.lower()}")), None)
+    if pname is None:
+        raise ValueError(f"{fid}: patch defines no spansaver_{fid.lower()} processor")
     body = procs[pname]
-    signal = next((k for k in ("logs", "metrics", "traces") if k in body), None)
-    if signal is None:
-        raise ValueError(f"{fid}: processor {pname} has no logs/metrics/traces block")
-    conds = next(iter(body[signal].values()))
-    if not conds:
-        raise ValueError(f"{fid}: processor {pname} has no drop conditions (would be a no-op)")
+    if pname.startswith("transform/"):
+        blocks = [v for k, v in body.items() if k.endswith("_statements")]
+        stmts = [s for blk in blocks for entry in blk for s in entry.get("statements", [])]
+        if not stmts:
+            raise ValueError(f"{fid}: transform processor {pname} has no statements (would be a no-op)")
+    else:  # filter processor
+        signal = next((k for k in ("logs", "metrics", "traces") if k in body), None)
+        if signal is None:
+            raise ValueError(f"{fid}: processor {pname} has no logs/metrics/traces block")
+        conds = next(iter(body[signal].values()))
+        if not conds:
+            raise ValueError(f"{fid}: processor {pname} has no drop conditions (would be a no-op)")
     pipe = _pipeline_key_for(patch)
     if pname not in patch["service"]["pipelines"][pipe]["processors"]:
         raise ValueError(f"{fid}: {pname} not wired into the {pipe} pipeline")
