@@ -1,0 +1,39 @@
+name: Deploy
+
+# Manual only (workflow_dispatch) — deploying restarts live containers, so it should be a
+# deliberate click, not every push. Flip to `push: branches: [main]` if you want auto-deploy.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: SSH → VM · rebuild + up
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script_stop: true
+          script: |
+            set -e
+            cd "${{ secrets.DEPLOY_PATH }}"
+            git pull --ff-only
+            cd deploy
+            docker compose --env-file .env -f docker-compose.prod.yml up -d --build
+            docker compose --env-file .env -f docker-compose.prod.yml ps
+
+# ── Required repository secrets (Settings → Secrets and variables → Actions) ──
+#   DEPLOY_HOST     the VM's public IP or hostname
+#   DEPLOY_USER     ssh user (in the docker group)
+#   DEPLOY_SSH_KEY  a PRIVATE ssh key whose public half is in the VM's ~/.ssh/authorized_keys
+#   DEPLOY_PATH     absolute path to the cloned repo on the VM (e.g. /home/ubuntu/spansaver)
+# The VM must already have SigNoz up (foundryctl) and deploy/.env + deploy/caddy.env filled in.
+# Protect the `production` environment with required reviewers for an approval gate.
