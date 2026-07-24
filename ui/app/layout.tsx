@@ -26,9 +26,10 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
-  colorScheme: 'dark',
+  colorScheme: 'dark light',
   themeColor: [
     { media: '(prefers-color-scheme: dark)', color: '#09090b' },
+    { media: '(prefers-color-scheme: light)', color: '#f8f9fb' },
   ],
   userScalable: true,
 }
@@ -38,9 +39,14 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  // Set the theme before first paint (no flash of the wrong theme). Persisted choice wins;
+  // otherwise follow the OS preference; fall back to dark.
+  const themeInit = `(function(){try{var t=localStorage.getItem('theme');if(t!=='light'&&t!=='dark'){t=window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';}document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();`
+
   return (
-    <html lang="en" className="bg-background">
+    <html lang="en" className="bg-background" suppressHydrationWarning>
       <body className="bg-background text-foreground antialiased">
+        <script dangerouslySetInnerHTML={{ __html: themeInit }} />
         {children}
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>

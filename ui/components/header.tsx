@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { api } from '@/lib/api'
+import { ThemeToggle } from '@/components/tui/theme-toggle'
 
 export function Header() {
   const pathname = usePathname()
@@ -25,8 +26,8 @@ export function Header() {
     <Link href={href}
       className={`mono px-3 py-1.5 text-xs tracking-wide rounded-md transition-colors ${
         isActive(href)
-          ? 'text-foreground bg-white/[0.06]'
-          : 'text-muted-foreground hover:text-foreground hover:bg-white/[0.03]'
+          ? 'text-foreground bg-[var(--overlay)]'
+          : 'text-muted-foreground hover:text-foreground hover:bg-[var(--overlay)]'
       }`}>
       <span className="text-primary mr-1.5">{sigil}</span>{label}
     </Link>
@@ -37,7 +38,7 @@ export function Header() {
       <div className="container mx-auto px-6 h-16 flex items-center justify-between gap-4">
         <div className="flex items-center gap-8">
           <Link href="/" className="flex items-center gap-2.5 group">
-            <div className="w-8 h-8 rounded-lg border border-border bg-white/[0.03] flex items-center justify-center group-hover:border-primary/60 transition-colors">
+            <div className="w-8 h-8 rounded-lg border border-border bg-[var(--overlay)] flex items-center justify-center group-hover:border-primary/60 transition-colors">
               <span className="mono text-primary text-sm font-bold">{'>_'}</span>
             </div>
             <div className="flex items-baseline gap-2">
@@ -52,11 +53,14 @@ export function Header() {
           </nav>
         </div>
 
-        <div className="mono flex items-center gap-2 text-[11px] tracking-wide px-3 py-1.5 rounded-full border border-border bg-white/[0.02]">
-          <span className={`live-dot w-1.5 h-1.5 rounded-full ${online === false ? 'bg-destructive text-destructive' : 'bg-secondary text-secondary'}`} />
-          <span className={online === false ? 'text-destructive' : 'text-muted-foreground'}>
-            {online === null ? 'CONNECTING' : online ? 'AUDITOR ONLINE' : 'AUDITOR OFFLINE'}
-          </span>
+        <div className="flex items-center gap-3">
+          <div className="mono flex items-center gap-2 text-[11px] tracking-wide px-3 py-1.5 rounded-full border border-border bg-[var(--overlay)]">
+            <span className={`live-dot w-1.5 h-1.5 rounded-full ${online === false ? 'bg-destructive text-destructive' : 'bg-secondary text-secondary'}`} />
+            <span className={online === false ? 'text-destructive' : 'text-muted-foreground'}>
+              {online === null ? 'CONNECTING' : online ? 'AUDITOR ONLINE' : 'AUDITOR OFFLINE'}
+            </span>
+          </div>
+          <ThemeToggle />
         </div>
       </div>
     </header>
