@@ -182,6 +182,11 @@ make ui                   # Mission Control at localhost:3000 (black console + l
 Prices are configurable assumptions in `.env` and are **labeled "assumed rate"** everywhere in
 the UI. Every other number is measured.
 
+```bash
+make test    # auditor unit tests — $ math, gen_ai key resolution, orphan-metric filters,
+             # Finding contract, L4 model-tier logic. Stdlib unittest, no extra deps.
+```
+
 ---
 
 ## Roadmap

@@ -1,4 +1,4 @@
-.PHONY: up down logs waste-on waste-off traffic audit apply verify unapply demo ui restore-baseline
+.PHONY: up down logs waste-on waste-off traffic audit apply verify unapply demo ui restore-baseline test
 
 up:            ## start collector + victim stack + auditor + ui (SigNoz runs separately)
 	docker compose up -d --build
@@ -38,6 +38,9 @@ restore-baseline:  ## panic button: baseline collector config, drop all patches,
 
 demo:          ## seeded end-to-end rehearsal run (see docs/DEMO-SCRIPT.md)
 	./scripts/demo.sh
+
+test:          ## run the auditor unit tests (stdlib unittest — no extra deps; CH tests self-skip off-image)
+	python3 -m unittest discover -s auditor/tests -t . -v
 
 ui:
 	cd ui && pnpm dev
