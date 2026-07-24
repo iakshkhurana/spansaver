@@ -101,7 +101,16 @@ def generate_l2_fix(finding: Finding) -> str:
     return path
 
 
-_BUILDERS = {"L1": generate_l1_fix, "L2": generate_l2_fix}
+def _recommend_only(finding: Finding) -> str:
+    """L3/L4 are recommend-only (LEAK-CATALOG): the detector already attached the suggestion to
+    finding.fix, there's nothing to stage and no auto-apply. Keep status DETECTED — the UI reads
+    fix.kind == 'recommendation' and shows 'suggested, not auto-applied' instead of an Apply."""
+    finding.status = Status.DETECTED
+    return ""
+
+
+_BUILDERS = {"L1": generate_l1_fix, "L2": generate_l2_fix,
+             "L3": _recommend_only, "L4": _recommend_only}
 
 
 def generate_fix(finding: Finding) -> str:

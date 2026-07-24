@@ -226,7 +226,250 @@ def detect_l2(ch: ClickHouse) -> Finding | None:
     return finding
 
 
-DETECTORS = {"L1": detect_l1, "L2": detect_l2}
+# ── L3 thresholds ──
+# A retry storm (LEAK-CATALOG L3): the same prompt hammered several times in a short window with
+# earlier attempts erroring. We lack a confirmed trace_id column on signoz_index_v3 (schema.py),
+# so we cluster by (prompt_hash, 1-minute bucket) as a trace-less proxy and require >=1 error in
+# the bucket — that error condition is what separates a retry burst from L1 duplicate traffic.
+L3_MIN_ATTEMPTS = _f("L3_MIN_ATTEMPTS", 3)   # identical-prompt calls in a bucket to look like a burst
+
+
+def detect_l3(ch: ClickHouse) -> Finding | None:
+    """L3 · Retry storms: naive retry loops re-sending a failing prompt, each attempt billed.
+
+    Recommend-only (LEAK-CATALOG): the fix is client-side backoff + a circuit breaker, suggested,
+    never auto-applied. waste = input+output tokens on the errored attempts — spend that produced
+    no usable answer. Returns None if the stack records no gen_ai errors (the safe, honest miss).
+    """
+    prompt_cell = f"{_STR}['{attrs.PROMPT_KEY}']"
+    in_cell = f"{_NUM}['{attrs.INPUT_TOKEN_KEY}']"
+    out_cell = f"{_NUM}['{attrs.OUTPUT_TOKEN_KEY}']"
+    is_llm = f"mapContains({_STR}, '{attrs.PROMPT_KEY}')"
+    window = f"{schema.SPAN_TS} >= now() - INTERVAL {settings.audit_window_hours} HOUR"
+
+    sql = f"""
+        SELECT
+            cityHash64({prompt_cell}) AS prompt_hash,
+            toStartOfInterval({schema.SPAN_TS}, INTERVAL 1 MINUTE) AS bucket,
+            count()                             AS attempts,
+            countIf({schema.SPAN_HAS_ERROR})    AS errors,
+            sum(if({schema.SPAN_HAS_ERROR}, {in_cell}, 0))  AS err_in,
+            sum(if({schema.SPAN_HAS_ERROR}, {out_cell}, 0)) AS err_out,
+            substring(any({prompt_cell}), 1, 200) AS sample
+        FROM {schema.T_TRACES}
+        WHERE {window} AND {schema.SPAN_SERVICE} = '{LLM_SERVICE}' AND {is_llm}
+        GROUP BY prompt_hash, bucket
+        HAVING attempts >= {int(L3_MIN_ATTEMPTS)} AND errors >= 1
+        ORDER BY errors DESC, attempts DESC
+    """
+    rows = ch.query(sql)
+    if not rows:
+        return None
+
+    storms = []
+    wasted_in = wasted_out = 0.0
+    failed_attempts = 0
+    hashes = set()
+    for prompt_hash, _bucket, attempts, errors, err_in, err_out, sample in rows:
+        wasted_in += float(err_in or 0.0)
+        wasted_out += float(err_out or 0.0)
+        failed_attempts += int(errors or 0)
+        hashes.add(str(prompt_hash))
+        storms.append({
+            "prompt_hash": str(prompt_hash),
+            "attempts": int(attempts or 0),
+            "failed_attempts": int(errors or 0),
+            "wasted_input_tokens": round(float(err_in or 0.0)),
+            "wasted_output_tokens": round(float(err_out or 0.0)),
+            "sample_prompt": sample,
+        })
+
+    finding = Finding(
+        id="L3",
+        domain="llm",
+        title="Retry storms",
+        service=LLM_SERVICE,
+        summary=(
+            f"{len(storms)} retry burst(s) across {len(hashes)} distinct prompt(s) — "
+            f"{failed_attempts:,} failed attempts re-sent within a minute, each billed for the "
+            f"input it shipped. Naive retries multiply spend on transient failures."
+        ),
+        measured={
+            "retry_bursts": storms,
+            "distinct_prompts": len(hashes),
+            "failed_attempts": failed_attempts,
+            "wasted_input_tokens_window": round(wasted_in),
+            "wasted_output_tokens_window": round(wasted_out),
+            "min_attempts_threshold": int(L3_MIN_ATTEMPTS),
+            "clustering": "prompt_hash x 1-minute bucket (trace-less proxy; no confirmed trace_id column)",
+            "window_hours": settings.audit_window_hours,
+        },
+        money=money.tokens_monthly(wasted_in, wasted_out),
+    )
+    link = evidence.llm_spans_link(LLM_SERVICE)
+    finding.add_evidence(Evidence(
+        label=f"errored gen_ai spans for {LLM_SERVICE} in SigNoz Traces Explorer",
+        deeplink=link["url"], filter=link["filter"], raw_query=" ".join(sql.split()),
+    ))
+    # Recommend-only: nothing is dropped and nothing auto-applies; the suggestion is a client-side
+    # backoff + circuit breaker so a transient failure stops fanning out into paid retries.
+    finding.safety = {
+        "safe": True,
+        "proof": ("Recommendation only — no data dropped, nothing auto-applied. Add exponential "
+                  "backoff + a circuit breaker on the askdocs LLM client so transient failures "
+                  "stop multiplying token spend."),
+        "references": [],
+        "checked": {"auto_apply": False, "kind": "recommendation"},
+    }
+    finding.fix = {
+        "kind": "recommendation",
+        "target": LLM_SERVICE,
+        "diff": (
+            "# askdocs LLM client — suggested (not auto-applied)\n"
+            "- resp = client.chat.completions.create(...)            # retried tightly on any error\n"
+            "+ for attempt in range(MAX_RETRIES):                    # cap attempts\n"
+            "+     try:\n"
+            "+         resp = client.chat.completions.create(...)\n"
+            "+         break\n"
+            "+     except TransientError:\n"
+            "+         sleep(BASE * 2 ** attempt + jitter)           # exponential backoff + jitter\n"
+            "+ # trip a circuit breaker after N consecutive failures; fail fast instead of storming"
+        ),
+        "apply": "suggested, not auto-applied",
+        "note": "Backoff + circuit breaker caps retry spend on transient failures. Client code change.",
+        "path": "",
+    }
+    return finding
+
+
+# ── L4 thresholds ──
+L4_TRIVIAL_TOKENS = _f("L4_TRIVIAL_TOKENS", 300)     # input+output below this = a trivial lookup
+L4_SAVINGS_FRACTION = _f("L4_SAVINGS_FRACTION", 0.9)  # assumed: a cheap tier serves it for ~1/10 the $
+L4_MIN_CALLS = _f("L4_MIN_CALLS", 5)                 # ignore a handful of stray calls
+# Expensive-tier model markers (a prefix/substring match). Cheap markers below always win, so
+# "gpt-4o-mini" is NOT flagged even though it contains "gpt-4o". Configurable via env.
+_L4_EXPENSIVE = [m.strip().lower() for m in os.getenv(
+    "L4_EXPENSIVE_MODELS",
+    "gpt-4o,gpt-4-turbo,gpt-4,gpt-4.1,o1,o3,claude-opus,claude-3-opus,claude-sonnet-4,claude-3-5-sonnet,gemini-1.5-pro",
+).split(",") if m.strip()]
+_L4_CHEAP_MARKERS = ("mini", "nano", "haiku", "flash", "small", "lite", "8b", "7b")
+
+
+def _is_expensive_model(model: str) -> bool:
+    m = (model or "").lower()
+    if not m or any(c in m for c in _L4_CHEAP_MARKERS):
+        return False
+    return any(x in m for x in _L4_EXPENSIVE)
+
+
+def detect_l4(ch: ClickHouse) -> Finding | None:
+    """L4 · Model overkill: a flagship-tier model answering trivial short lookups.
+
+    Recommend-only routing suggestion (LEAK-CATALOG). We aggregate trivial calls (input+output <
+    threshold) per model, keep only expensive-tier models, and project the savings of routing them
+    to a cheap tier (an assumed fraction, labeled). On a stack already on a mini/cheap model this
+    returns None — which is the correct, honest result: no overkill to report.
+    """
+    model_cell = f"{_STR}['{attrs.MODEL_KEY}']"
+    in_cell = f"{_NUM}['{attrs.INPUT_TOKEN_KEY}']"
+    out_cell = f"{_NUM}['{attrs.OUTPUT_TOKEN_KEY}']"
+    is_llm = f"mapContains({_STR}, '{attrs.PROMPT_KEY}')"
+    window = f"{schema.SPAN_TS} >= now() - INTERVAL {settings.audit_window_hours} HOUR"
+
+    sql = f"""
+        SELECT {model_cell}   AS model,
+               count()        AS calls,
+               sum({in_cell})  AS in_tok,
+               sum({out_cell}) AS out_tok
+        FROM {schema.T_TRACES}
+        WHERE {window} AND {schema.SPAN_SERVICE} = '{LLM_SERVICE}' AND {is_llm}
+          AND ({in_cell} + {out_cell}) < {int(L4_TRIVIAL_TOKENS)}
+          AND {model_cell} != ''
+        GROUP BY model
+        ORDER BY calls DESC
+    """
+    rows = ch.query(sql)
+    if not rows:
+        return None
+
+    offenders = []
+    in_sum = out_sum = 0.0
+    calls_sum = 0
+    for model, calls, in_tok, out_tok in rows:
+        if not _is_expensive_model(str(model)):
+            continue
+        calls = int(calls or 0)
+        offenders.append({
+            "model": str(model),
+            "trivial_calls": calls,
+            "input_tokens": round(float(in_tok or 0.0)),
+            "output_tokens": round(float(out_tok or 0.0)),
+        })
+        in_sum += float(in_tok or 0.0)
+        out_sum += float(out_tok or 0.0)
+        calls_sum += calls
+
+    if not offenders or calls_sum < L4_MIN_CALLS:
+        return None
+
+    m = money.tokens_monthly(in_sum, out_sum)
+    current = m["cost_month"]
+    m["current_cost_month"] = current
+    m["savings_fraction"] = L4_SAVINGS_FRACTION
+    m["cost_month"] = round(current * L4_SAVINGS_FRACTION, 2)   # recoverable = projected saving
+    m["rate_unit"] = "$/Mtok in|out (assumed); saving = current x assumed cheap-tier fraction"
+
+    finding = Finding(
+        id="L4",
+        domain="llm",
+        title="Model overkill",
+        service=LLM_SERVICE,
+        summary=(
+            f"{calls_sum:,} trivial call(s) (<{int(L4_TRIVIAL_TOKENS)} tokens) are answered by a "
+            f"flagship-tier model when a cheap tier would do. Routing them down projects "
+            f"~{int(L4_SAVINGS_FRACTION * 100)}% off their current ${current:,.2f}/mo."
+        ),
+        measured={
+            "offending_models": offenders,
+            "trivial_calls": calls_sum,
+            "trivial_token_ceiling": int(L4_TRIVIAL_TOKENS),
+            "current_cost_month": current,
+            "assumed_savings_fraction": L4_SAVINGS_FRACTION,
+            "window_hours": settings.audit_window_hours,
+        },
+        money=m,
+    )
+    link = evidence.llm_spans_link(LLM_SERVICE)
+    finding.add_evidence(Evidence(
+        label=f"gen_ai spans for {LLM_SERVICE} by model in SigNoz Traces Explorer",
+        deeplink=link["url"], filter=link["filter"], raw_query=" ".join(sql.split()),
+    ))
+    finding.safety = {
+        "safe": True,
+        "proof": ("Recommendation only — no data dropped, nothing auto-applied. Route trivial "
+                  "short lookups to a cheap-tier model; keep the flagship for hard prompts. The "
+                  "saving is an assumed cheap-tier rate fraction, labeled as such."),
+        "references": [],
+        "checked": {"auto_apply": False, "kind": "recommendation",
+                    "savings_fraction": L4_SAVINGS_FRACTION},
+    }
+    finding.fix = {
+        "kind": "recommendation",
+        "target": LLM_SERVICE,
+        "diff": (
+            "# askdocs model routing — suggested (not auto-applied)\n"
+            "- model = FLAGSHIP_MODEL                      # every request, regardless of difficulty\n"
+            "+ model = CHEAP_MODEL if is_trivial(prompt) else FLAGSHIP_MODEL\n"
+            "+ # is_trivial: short prompt / simple-lookup shape -> cheap tier; escalate on low confidence"
+        ),
+        "apply": "suggested, not auto-applied",
+        "note": "Route trivial lookups to a cheap tier; escalate hard prompts. Savings labeled assumed.",
+        "path": "",
+    }
+    return finding
+
+
+DETECTORS = {"L1": detect_l1, "L2": detect_l2, "L3": detect_l3, "L4": detect_l4}
 
 
 def run(ids: list[str] | None = None) -> list[Finding]:
@@ -235,7 +478,16 @@ def run(ids: list[str] | None = None) -> list[Finding]:
     for fid, fn in DETECTORS.items():
         if ids and fid not in ids:
             continue
-        f = fn(ch)
+        # One detector must not sink the whole audit. A dead ClickHouse is a whole-stack problem
+        # (fail loud, re-raise); any other per-detector error is logged and skipped so the working
+        # detectors still return — matters most for the newer recommend-only L3/L4 on odd data.
+        try:
+            f = fn(ch)
+        except ClickHouseUnavailable:
+            raise
+        except Exception as e:  # noqa: BLE001
+            print(f"[warn] LLM detector {fid} errored, skipping: {e}", file=sys.stderr)
+            continue
         if f is not None:
             f.status = Status.DETECTED
             out.append(f)
