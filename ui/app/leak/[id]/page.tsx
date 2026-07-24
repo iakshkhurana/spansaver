@@ -9,9 +9,9 @@ import { ActionBar } from '@/components/action-bar'
 import { MoneyMath } from '@/components/money-math'
 import { statusClass } from '@/components/findings-table'
 import { api } from '@/lib/api'
-import { Finding } from '@/lib/types'
+import { Finding, Explanation } from '@/lib/types'
 import { moneyMo } from '@/lib/format'
-import { ArrowLeft, ArrowRight, ShieldCheck, ShieldAlert, ExternalLink, Loader2, CheckCircle2 } from 'lucide-react'
+import { ArrowLeft, ArrowRight, ShieldCheck, ShieldAlert, ExternalLink, Loader2, CheckCircle2, Sparkles } from 'lucide-react'
 
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -117,6 +117,51 @@ function VerifyPanel({ ver }: { ver: Verification }) {
         <summary className="text-[11px] text-muted-foreground cursor-pointer hover:text-primary">raw verification payload</summary>
         <pre className="mt-2 p-3 bg-background/60 border border-primary/10 rounded text-[11px] font-mono text-muted-foreground overflow-x-auto whitespace-pre-wrap">{JSON.stringify(ver, null, 2)}</pre>
       </details>
+    </Panel>
+  )
+}
+
+// The auditor explaining its OWN finding via a real, traced LLM call. The usage + cost line is the
+// point: SpanSaver discloses what its own AI call cost, priced with the same assumed rates.
+function ExplainPanel({ id }: { id: string }) {
+  const [exp, setExp] = useState<Explanation | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+
+  const run = async () => {
+    try { setBusy(true); setErr(null); setExp((await api.explainFinding(id)).explanation) }
+    catch (e) { setErr(e instanceof Error ? e.message : 'explain failed') }
+    finally { setBusy(false) }
+  }
+
+  return (
+    <Panel title="Explain with AI (auditor's own traced LLM call)">
+      <div className="border border-accent/30 bg-accent/[0.04] rounded-md p-4 space-y-3">
+        {!exp && !err && (
+          <p className="text-xs text-muted-foreground">
+            SpanSaver explains this finding by calling an LLM itself — the request is Traceloop-traced
+            into SigNoz as <span className="font-mono text-secondary">spansaver-auditor</span>, so the
+            auditor audits its own AI cost.
+          </p>
+        )}
+        {exp && <p className="text-sm text-foreground leading-relaxed">{exp.explanation}</p>}
+        {err && <p className="text-xs text-destructive font-mono">✗ {err}</p>}
+
+        {exp && (
+          <div className="flex flex-wrap gap-x-5 gap-y-1 text-[11px] font-mono text-muted-foreground border-t border-accent/15 pt-3">
+            <span>model <span className="text-secondary">{exp.provider}/{exp.model}</span></span>
+            <span>tokens <span className="text-secondary">{exp.usage.input_tokens}↑ / {exp.usage.output_tokens}↓</span></span>
+            <span>this call cost <span className="neon-green font-bold">${exp.cost_usd.toFixed(4)}</span> <span className="opacity-70">({exp.rate_unit})</span></span>
+          </div>
+        )}
+        {exp && <p className="text-[10px] text-muted-foreground/70 font-mono">{exp.traced}</p>}
+
+        <button onClick={run} disabled={busy}
+          className="inline-flex items-center gap-2 text-xs font-bold px-3 py-2 rounded-md border border-accent/40 text-accent hover:bg-accent/10 transition-colors disabled:opacity-50">
+          {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+          {busy ? 'asking the model…' : exp ? 'explain again' : 'Explain with AI'}
+        </button>
+      </div>
     </Panel>
   )
 }
@@ -235,6 +280,8 @@ export default function LeakDetail() {
         </Panel>
 
         {ver && <VerifyPanel ver={ver as Verification} />}
+
+        <ExplainPanel id={f.id} />
 
         <ActionBar finding={f} isLoading={acting}
           onApply={() => act(api.applyFinding)} onVerify={() => act(api.verifyFinding)} onUnapply={() => act(api.unapplyFinding)}>
