@@ -18,9 +18,27 @@ the exact signals the L1/L2 detectors act on, so the dashboard and the auditor t
 | Calls & tokens by model | per-model cost drivers | model overkill (L4, future) |
 | Cacheable duplicate prompts | prompt hashes seen >1× | L1 evidence |
 
+## telemetry-cost.json — SpanSaver · Telemetry Cost
+Infra-side observability waste for the victim stack — the signals the T1/T3/T4 detectors act on,
+so the dashboard and the auditor tell the same story. Confirmed columns only (schema.py):
+
+| Panel | Shows | Ties to |
+|-------|-------|---------|
+| Total log bytes (window) | `sum(length(body))` across services | T1 headline |
+| Log volume by service | bytes · DEBUG lines · total lines / service | T1 (debug flood = high DEBUG share) |
+| DEBUG vs INFO+ over time | severity 1-8 vs 9+ per minute | T1 (DEBUG steps to ~0 after apply) |
+| Spans by route | span + error count per `httpRoute` | T3 (probe spam, 0 errors) |
+| Active series per metric | `uniqExact(fingerprint)` per `metric_name` | T4 (cardinality bomb) |
+
+> Note the two time bases: `logs_v2.timestamp` is **UInt64 nanoseconds** (`{{.start_timestamp_ms}} * 1000000`),
+> `signoz_index_v3.timestamp` is **DateTime64** (`fromUnixTimestamp64Milli(...)`), and
+> `time_series_v4.unix_milli` is **epoch millis** (`{{.start_timestamp_ms}}` directly).
+
 ## Import
-SigNoz UI → **Dashboards → + New dashboard → Import JSON** → paste `agent-ops.json` (or upload it).
-Then set the time range to cover your traffic window.
+SigNoz UI → **Dashboards → + New dashboard → Import JSON** → paste `agent-ops.json` **and**
+`telemetry-cost.json` (import both — the verify integrity sweep counts every dashboard that still
+resolves, so more imported dashboards = a stronger "N dashboards intact" banner). Set the time
+range to cover your traffic window.
 
 > **Time-filter tokens (confirmed on v0.133):** panels use `{{.start_timestamp_ms}}` /
 > `{{.end_timestamp_ms}}` (epoch millis, via `fromUnixTimestamp64Milli`). Bucketing is a fixed

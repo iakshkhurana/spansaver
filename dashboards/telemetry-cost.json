@@ -1,0 +1,112 @@
+{
+  "title": "SpanSaver · Telemetry Cost",
+  "description": "Infra-side observability waste for the victim stack — the exact signals the T1/T3/T4 detectors act on, so the dashboard and the auditor tell the same story. Log bytes by service (T1 debug flood), DEBUG vs INFO over time, health-check span share (T3), and metric cardinality per name (T4). Queries use CONFIRMED columns only (auditor/telemetry_auditor/schema.py, VERIFIED 2026-07-21): logs_v2 timestamp is UInt64 nanoseconds; signoz_index_v3 timestamp is DateTime64; time_series_v4 unix_milli is epoch millis. If this build rejects the import, rebuild panels from dashboards/README.md (same queries).",
+  "tags": ["spansaver", "telemetry", "cost", "infra"],
+  "layout": [
+    { "i": "total_log_bytes", "x": 0, "y": 0, "w": 4, "h": 6 },
+    { "i": "log_bytes_by_service", "x": 4, "y": 0, "w": 8, "h": 6 },
+    { "i": "debug_vs_info", "x": 0, "y": 6, "w": 12, "h": 6 },
+    { "i": "healthcheck_span_share", "x": 0, "y": 12, "w": 6, "h": 6 },
+    { "i": "metric_cardinality", "x": 6, "y": 12, "w": 6, "h": 6 }
+  ],
+  "widgets": [
+    {
+      "id": "total_log_bytes",
+      "title": "Total log bytes (window)",
+      "description": "sum(length(body)) across all services over the selected range — the ingest the T1 filter trims.",
+      "panelTypes": "value",
+      "timePreferance": "GLOBAL_TIME",
+      "nullZeroValues": "zero",
+      "opacity": "1",
+      "yAxisUnit": "bytes",
+      "query": {
+        "queryType": "clickhouse_sql",
+        "clickhouse_sql": [
+          { "name": "A", "legend": "log bytes", "disabled": false,
+            "query": "SELECT sum(length(body)) AS value FROM signoz_logs.distributed_logs_v2 WHERE timestamp >= {{.start_timestamp_ms}} * 1000000 AND timestamp <= {{.end_timestamp_ms}} * 1000000" }
+        ],
+        "promql": [{ "name": "A", "query": "", "legend": "", "disabled": false }],
+        "builder": { "queryData": [], "queryFormulas": [] }
+      }
+    },
+    {
+      "id": "log_bytes_by_service",
+      "title": "Log volume by service (T1)",
+      "description": "Bytes, DEBUG lines, and total lines per service. A high DEBUG share on a hot service is the debug-flood leak.",
+      "panelTypes": "table",
+      "timePreferance": "GLOBAL_TIME",
+      "nullZeroValues": "zero",
+      "opacity": "1",
+      "yAxisUnit": "short",
+      "query": {
+        "queryType": "clickhouse_sql",
+        "clickhouse_sql": [
+          { "name": "A", "legend": "", "disabled": false,
+            "query": "SELECT resources_string['service.name'] AS service, sum(length(body)) AS log_bytes, countIf(severity_number > 0 AND severity_number < 9) AS debug_lines, count() AS total_lines FROM signoz_logs.distributed_logs_v2 WHERE timestamp >= {{.start_timestamp_ms}} * 1000000 AND timestamp <= {{.end_timestamp_ms}} * 1000000 GROUP BY service ORDER BY log_bytes DESC" }
+        ],
+        "promql": [{ "name": "A", "query": "", "legend": "", "disabled": false }],
+        "builder": { "queryData": [], "queryFormulas": [] }
+      }
+    },
+    {
+      "id": "debug_vs_info",
+      "title": "DEBUG vs INFO+ log lines over time",
+      "description": "OTel severity 1-8 (DEBUG/TRACE) vs 9+ (INFO and above). After the T1 apply the DEBUG series steps to ~0 while INFO+ keeps flowing.",
+      "panelTypes": "graph",
+      "timePreferance": "GLOBAL_TIME",
+      "nullZeroValues": "zero",
+      "opacity": "1",
+      "yAxisUnit": "short",
+      "query": {
+        "queryType": "clickhouse_sql",
+        "clickhouse_sql": [
+          { "name": "A", "legend": "DEBUG/TRACE (<INFO)", "disabled": false,
+            "query": "SELECT toStartOfInterval(toDateTime(timestamp / 1000000000), INTERVAL 1 MINUTE) AS ts, countIf(severity_number > 0 AND severity_number < 9) AS value FROM signoz_logs.distributed_logs_v2 WHERE timestamp >= {{.start_timestamp_ms}} * 1000000 AND timestamp <= {{.end_timestamp_ms}} * 1000000 GROUP BY ts ORDER BY ts" },
+          { "name": "B", "legend": "INFO+ (>=INFO)", "disabled": false,
+            "query": "SELECT toStartOfInterval(toDateTime(timestamp / 1000000000), INTERVAL 1 MINUTE) AS ts, countIf(severity_number >= 9) AS value FROM signoz_logs.distributed_logs_v2 WHERE timestamp >= {{.start_timestamp_ms}} * 1000000 AND timestamp <= {{.end_timestamp_ms}} * 1000000 GROUP BY ts ORDER BY ts" }
+        ],
+        "promql": [{ "name": "A", "query": "", "legend": "", "disabled": false }],
+        "builder": { "queryData": [], "queryFormulas": [] }
+      }
+    },
+    {
+      "id": "healthcheck_span_share",
+      "title": "Spans by route — health-check spam (T3)",
+      "description": "Span count and error count per httpRoute. Probe routes (/healthz) dominating with 0 errors are the waste; error-status probes are KEPT as signal.",
+      "panelTypes": "table",
+      "timePreferance": "GLOBAL_TIME",
+      "nullZeroValues": "zero",
+      "opacity": "1",
+      "yAxisUnit": "short",
+      "query": {
+        "queryType": "clickhouse_sql",
+        "clickhouse_sql": [
+          { "name": "A", "legend": "", "disabled": false,
+            "query": "SELECT httpRoute AS route, count() AS spans, countIf(has_error) AS errors FROM signoz_traces.distributed_signoz_index_v3 WHERE httpRoute != '' AND timestamp >= fromUnixTimestamp64Milli({{.start_timestamp_ms}}) AND timestamp <= fromUnixTimestamp64Milli({{.end_timestamp_ms}}) GROUP BY route ORDER BY spans DESC LIMIT 20" }
+        ],
+        "promql": [{ "name": "A", "query": "", "legend": "", "disabled": false }],
+        "builder": { "queryData": [], "queryFormulas": [] }
+      }
+    },
+    {
+      "id": "metric_cardinality",
+      "title": "Active series per metric — cardinality (T4)",
+      "description": "uniqExact(fingerprint) per metric_name = active series. A single metric exploded to thousands of series (a per-user label) is the cardinality bomb; the fix drops the label, keeping the metric.",
+      "panelTypes": "table",
+      "timePreferance": "GLOBAL_TIME",
+      "nullZeroValues": "zero",
+      "opacity": "1",
+      "yAxisUnit": "short",
+      "query": {
+        "queryType": "clickhouse_sql",
+        "clickhouse_sql": [
+          { "name": "A", "legend": "", "disabled": false,
+            "query": "SELECT metric_name, uniqExact(fingerprint) AS active_series FROM signoz_metrics.distributed_time_series_v4 WHERE unix_milli >= {{.start_timestamp_ms}} AND unix_milli <= {{.end_timestamp_ms}} GROUP BY metric_name ORDER BY active_series DESC LIMIT 20" }
+        ],
+        "promql": [{ "name": "A", "query": "", "legend": "", "disabled": false }],
+        "builder": { "queryData": [], "queryFormulas": [] }
+      }
+    }
+  ],
+  "variables": {}
+}
