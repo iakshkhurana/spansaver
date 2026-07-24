@@ -1,5 +1,8 @@
 # secrets / local config
 .env
+# deploy secrets (real configs; only the *.example templates are tracked)
+/deploy/.env
+/deploy/caddy.env
 
 # SigNoz self-host clone (runs separately; not part of our repo)
 /signoz/

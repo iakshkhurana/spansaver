@@ -1,0 +1,93 @@
+# SpanSaver — PUBLIC deploy on a single VM. SigNoz itself is installed separately (casting.yml /
+# Foundry) and this stack JOINS its docker network. Caddy is the ONLY public entrypoint (80/443);
+# nothing else publishes a host port. Lock the VM's cloud firewall to inbound 22/80/443 only
+# (docker bypasses ufw — use the provider security group). See deploy/README.md.
+#
+# Run from the deploy/ dir:
+#   docker compose --env-file .env -f docker-compose.prod.yml up -d --build
+#
+# Interpolated vars (APP_DOMAIN, SIGNOZ_DOMAIN, BASIC_AUTH_*, SIGNOZ_DOCKER_NETWORK, *_PUBLIC_URL)
+# come from deploy/.env; the app's runtime config (keys, prices, WASTE_*) comes from ../.env.
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    # Loaded literally (no compose ${} interpolation) so the bcrypt hash's $ chars pass through intact.
+    env_file: ./caddy.env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # to reach SigNoz's host-published UI on :8080
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [ ui, auditor ]
+
+  collector:
+    build: ../collector
+    container_name: spansaver-collector      # stable name so the auditor can restart it on apply
+    restart: unless-stopped
+    env_file: ../.env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command: ["--config=/etc/otelcol/merged.yaml"]
+    volumes:
+      - ../collector:/etc/otelcol
+
+  orders:
+    build: ../victim-stack/orders
+    restart: unless-stopped
+    env_file: ../.env
+    environment: [ OTEL_SERVICE_NAME=orders ]
+    depends_on: [ collector ]
+
+  payments:
+    build: ../victim-stack/payments
+    restart: unless-stopped
+    env_file: ../.env
+    environment: [ OTEL_SERVICE_NAME=payments ]
+    depends_on: [ collector ]
+
+  askdocs:
+    build: ../victim-stack/askdocs
+    restart: unless-stopped
+    env_file: ../.env
+    environment: [ OTEL_SERVICE_NAME=askdocs ]
+    depends_on: [ collector ]
+
+  auditor:
+    build: ../auditor
+    restart: unless-stopped
+    env_file: ../.env
+    environment:
+      - SIGNOZ_API_URL=http://host.docker.internal:8080
+      - SIGNOZ_UI_URL=${SIGNOZ_PUBLIC_URL}        # evidence deep-links open the PUBLIC SigNoz
+      - UI_ORIGINS=${APP_PUBLIC_URL}
+      - COLLECTOR_DIR=/workspace/collector
+      - COLLECTOR_CONTAINER=spansaver-collector
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ../collector:/workspace/collector
+      - /var/run/docker.sock:/var/run/docker.sock   # apply/unapply restart the collector (kept behind auth)
+
+  ui:
+    build:
+      context: ../ui
+      args:
+        NEXT_PUBLIC_AUDITOR_URL: /api               # same-origin: Caddy serves the auditor under /api
+        NEXT_PUBLIC_USE_MOCK: "false"
+    restart: unless-stopped
+    depends_on: [ auditor ]
+
+volumes:
+  caddy_data:
+  caddy_config:
+
+networks:
+  default:
+    name: ${SIGNOZ_DOCKER_NETWORK:-signoz-net}
+    external: true

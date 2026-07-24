@@ -1,0 +1,33 @@
+# Caddy — the ONLY public entrypoint. Auto-TLS (Let's Encrypt) for both domains.
+#
+#   {$APP_DOMAIN}     → Mission Control UI, with the auditor API under /api (same origin).
+#                       Mutating + cost-incurring endpoints (apply/unapply/verify/explain) are
+#                       behind HTTP Basic Auth so the public can't restart containers or spend
+#                       LLM tokens. Read paths (/audit, /findings, /health) stay open for the demo.
+#   {$SIGNOZ_DOMAIN}  → SigNoz UI (which has its own login).
+#
+# ClickHouse, OTLP, and the raw auditor/UI ports are NEVER published publicly — the VM's cloud
+# security group must allow inbound 22/80/443 only (see deploy/README.md).
+
+{$APP_DOMAIN} {
+	encode zstd gzip
+
+	# Auditor API, served same-origin under /api (Caddy strips the prefix).
+	handle_path /api/* {
+		# Gate the dangerous / costly endpoints; everything else (audit, findings, health) is open.
+		@guarded path /apply/* /unapply/* /verify/* /explain/*
+		basic_auth @guarded {
+			{$BASIC_AUTH_USER} {$BASIC_AUTH_HASH}
+		}
+		reverse_proxy auditor:8100
+	}
+
+	# Everything else → the Next.js app.
+	reverse_proxy ui:3000
+}
+
+{$SIGNOZ_DOMAIN} {
+	encode zstd gzip
+	# SigNoz publishes its UI on the host; reach it via the docker host gateway.
+	reverse_proxy host.docker.internal:8080
+}
