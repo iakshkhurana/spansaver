@@ -7,30 +7,33 @@
 /* SpanSaver — refined black console. Near-black canvas, near-white type, restrained data
    accents (sky/emerald/orange/violet). Headings are sans; data, labels, and the terminal are
    mono. The old phosphor/CRT look is gone — this reads as a professional platform surface. */
+/* Utilities reference the semantic vars (below), which are themed per light/dark. `inline`
+   inlines the var() reference into each utility, so overriding a var reskins the whole app. */
 @theme inline {
-  --color-primary: rgb(56 189 248);          /* sky — active / accents / links */
-  --color-primary-foreground: rgb(8 10 14);
-  --color-secondary: rgb(52 211 153);        /* emerald — money / success */
-  --color-secondary-foreground: rgb(8 10 14);
-  --color-accent: rgb(251 146 60);           /* amber — warn / pending */
-  --color-accent-foreground: rgb(8 10 14);
-  --color-violet: rgb(167 139 250);
-  --color-background: rgb(9 9 11);
-  --color-foreground: rgb(237 237 240);
-  --color-card: rgb(16 16 19);
-  --color-card-foreground: rgb(237 237 240);
-  --color-muted: rgb(34 34 39);
-  --color-muted-foreground: rgb(124 124 136);
-  --color-border: rgba(255 255 255 / 0.08);
-  --color-input: rgb(20 20 24);
-  --color-ring: rgb(56 189 248);
-  --color-destructive: rgb(248 113 113);
-  --color-destructive-foreground: rgb(255 255 255);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-violet: var(--violet);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
   --radius: 0.75rem;
   --font-mono: 'JetBrains Mono', 'Space Mono', ui-monospace, 'SFMono-Regular', 'Courier New', monospace;
   --font-sans: 'Geist', 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
 }
 
+/* ── DARK (default) ── */
 :root {
   color-scheme: dark;
   --background: rgb(9 9 11);
@@ -43,20 +46,59 @@
   --primary-foreground: rgb(8 10 14);
   --secondary: rgb(52 211 153);
   --secondary-foreground: rgb(8 10 14);
-  --muted: rgb(34 34 39);
-  --muted-foreground: rgb(124 124 136);
   --accent: rgb(251 146 60);
   --accent-foreground: rgb(8 10 14);
+  --violet: rgb(167 139 250);
+  --muted: rgb(34 34 39);
+  --muted-foreground: rgb(124 124 136);
   --destructive: rgb(248 113 113);
+  --destructive-foreground: rgb(255 255 255);
   --border: rgba(255 255 255 / 0.08);
   --input: rgb(20 20 24);
   --ring: rgb(56 189 248);
-  --chart-1: rgb(56 189 248);
-  --chart-2: rgb(52 211 153);
-  --chart-3: rgb(251 146 60);
-  --chart-4: rgb(167 139 250);
-  --chart-5: rgb(244 114 182);
+  /* v2 surface tokens (themed) */
+  --surface: rgb(13 13 16);
+  --surface-2: rgb(16 16 20);
+  --hairline: rgba(255 255 255 / 0.10);
+  --track: rgba(255 255 255 / 0.06);
+  --overlay: rgba(255 255 255 / 0.03);
+  --grid-line: rgba(255 255 255 / 0.021);
+  --shimmer-a: rgba(255 255 255 / 0.035);
+  --shimmer-b: rgba(255 255 255 / 0.075);
   --radius: 0.75rem;
+}
+
+/* ── LIGHT ── */
+:root[data-theme='light'] {
+  color-scheme: light;
+  --background: rgb(248 249 251);
+  --foreground: rgb(24 24 27);
+  --card: rgb(255 255 255);
+  --card-foreground: rgb(24 24 27);
+  --popover: rgb(255 255 255);
+  --popover-foreground: rgb(24 24 27);
+  --primary: rgb(2 132 199);          /* sky-600 */
+  --primary-foreground: rgb(255 255 255);
+  --secondary: rgb(4 145 100);        /* emerald-600 */
+  --secondary-foreground: rgb(255 255 255);
+  --accent: rgb(194 102 8);           /* amber-700 */
+  --accent-foreground: rgb(255 255 255);
+  --violet: rgb(124 58 237);          /* violet-600 */
+  --muted: rgb(241 242 245);
+  --muted-foreground: rgb(90 90 102);
+  --destructive: rgb(220 38 38);      /* red-600 */
+  --destructive-foreground: rgb(255 255 255);
+  --border: rgba(15 15 20 / 0.12);
+  --input: rgb(255 255 255);
+  --ring: rgb(2 132 199);
+  --surface: rgb(255 255 255);
+  --surface-2: rgb(252 252 253);
+  --hairline: rgba(15 15 20 / 0.12);
+  --track: rgba(15 15 20 / 0.07);
+  --overlay: rgba(15 15 20 / 0.04);
+  --grid-line: rgba(15 15 20 / 0.03);
+  --shimmer-a: rgba(15 15 20 / 0.05);
+  --shimmer-b: rgba(15 15 20 / 0.10);
 }
 
 @layer base {
@@ -91,12 +133,13 @@
 
   /* Panel / card surface — subtle border, faint top sheen, no glow. */
   .cyber-card {
-    @apply bg-card border border-border rounded-xl;
+    @apply border rounded-xl;
+    border-color: var(--border);
     background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.025) 0%, transparent 18%),
-      rgb(16 16 19);
+      linear-gradient(180deg, var(--overlay) 0%, transparent 18%),
+      var(--card);
   }
-  .cyber-card:hover { border-color: rgba(255, 255, 255, 0.14); }
+  .cyber-card:hover { border-color: var(--hairline); }
 
   /* Hero gradient wordmark (violet → sky → muted). */
   .gradient-text {
@@ -109,7 +152,7 @@
 
   /* Faint dot-grid for terminal/status panels. */
   .dot-grid {
-    background-image: radial-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+    background-image: radial-gradient(var(--track) 1px, transparent 1px);
     background-size: 22px 22px;
   }
 
@@ -133,6 +176,127 @@
 
   /* Thin, unobtrusive scrollbars inside panels. */
   .thin-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
-  .thin-scroll::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 8px; }
+  .thin-scroll::-webkit-scrollbar-thumb { background: var(--hairline); border-radius: 8px; }
   .thin-scroll::-webkit-scrollbar-track { background: transparent; }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   v2 · Operator console — a precise, near-monochrome control surface with the
+   terminal/btop DNA elevated to a production dashboard. Additive only: these
+   classes are used by the v2 home + tui/* components, nothing else restyles.
+   ───────────────────────────────────────────────────────────────────────── */
+@layer base {
+  /* Accessible keyboard focus everywhere interactive. */
+  a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, [tabindex]:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  ::selection { background: rgba(56, 189, 248, 0.28); color: var(--foreground); }
+  /* Respect users who ask for less motion. */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer utilities {
+  .tui { font-family: var(--font-mono); font-feature-settings: 'ss01', 'cv01'; }
+  .figure { font-variant-numeric: tabular-nums; letter-spacing: 0; }
+
+  /* A panel whose title is notched into its top border (the TUI hallmark),
+     with real depth: 1px border, inner top hairline, faint drop shadow. */
+  .tui-panel {
+    position: relative;
+    border: 1px solid var(--hairline);
+    border-radius: 7px;
+    background:
+      linear-gradient(180deg, var(--overlay), transparent 45%),
+      var(--surface);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045), 0 1px 2px rgba(0, 0, 0, 0.35);
+    transition: border-color 0.18s ease, box-shadow 0.18s ease;
+  }
+  .tui-panel:hover {
+    border-color: var(--hairline);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 6px 20px -10px rgba(0, 0, 0, 0.55);
+  }
+  .tui-panel > .tui-title,
+  .tui-panel > .tui-meta {
+    position: absolute;
+    top: 0;
+    transform: translateY(-52%);
+    padding: 0 0.5rem;
+    background: var(--surface);              /* cuts the border line behind the label */
+    font-family: var(--font-mono);
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .tui-panel > .tui-title {
+    left: 0.8rem;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+  .tui-panel > .tui-title::before {          /* small accent tick before the label */
+    content: '';
+    width: 3px; height: 11px;
+    border-radius: 2px;
+    background: currentColor;
+    opacity: 0.9;
+  }
+  .tui-panel > .tui-meta {
+    right: 0.8rem;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    color: var(--muted-foreground);
+  }
+
+  /* Faint horizontal scanlines for status strips. */
+  .tui-scan { background-image: repeating-linear-gradient(180deg, var(--overlay) 0 1px, transparent 1px 3px); }
+
+  /* Blinking block caret for prompts / bottom status. */
+  .tui-caret { display: inline-block; width: 0.5em; height: 1.05em; background: currentColor; vertical-align: text-bottom; border-radius: 1px; }
+
+  /* Shimmer skeleton for loading states. */
+  .skeleton {
+    background: linear-gradient(90deg, var(--shimmer-a) 25%, var(--shimmer-b) 37%, var(--shimmer-a) 63%);
+    background-size: 400% 100%;
+    animation: shimmer 1.4s ease infinite;
+    border-radius: 4px;
+  }
+  @keyframes shimmer { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }
+
+  /* Soft steady pulse for the "live" status dot. */
+  .pulse-dot { animation: pulseDot 2.4s ease-in-out infinite; }
+  @keyframes pulseDot { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+  /* Faint blueprint grid behind the whole console — depth without noise. */
+  .grid-bg {
+    background-image:
+      linear-gradient(var(--grid-line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+    background-size: 42px 42px;
+    background-position: -1px -1px;
+  }
+
+  /* Compact tile / "bubble" surface for KPI stats and matrix cells. */
+  .tile {
+    border: 1px solid var(--hairline);
+    border-radius: 8px;
+    background:
+      linear-gradient(180deg, var(--overlay), transparent 60%),
+      var(--surface-2);
+    transition: border-color 0.16s ease, transform 0.16s ease, box-shadow 0.16s ease;
+  }
+  .tile:hover { border-color: var(--hairline); box-shadow: 0 6px 20px -10px rgba(0, 0, 0, 0.5); }
+
+  /* Thin connector line used between pipeline stages. */
+  .dash-x { background-image: repeating-linear-gradient(90deg, currentColor 0 5px, transparent 5px 10px); height: 1px; }
 }
