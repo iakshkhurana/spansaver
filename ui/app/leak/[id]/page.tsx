@@ -288,7 +288,9 @@ export default function LeakDetail() {
           {f.status === 'fix_ready' && 'Fix generated & proven safe — ready to apply.'}
           {f.status === 'applied' && 'Applied. Run verify to confirm the leak stopped and nothing broke.'}
           {f.status === 'verified' && 'Verified on real metrics. Leak sealed.'}
-          {f.status === 'detected' && (f.error || 'Detected — no fix generated.')}
+          {f.status === 'detected' && (f.fix?.kind === 'recommendation'
+            ? 'Recommend-only — the fix is suggested (a client change), not auto-applied. See “The fix” above.'
+            : (f.error || 'Detected — no fix generated.'))}
         </ActionBar>
       </main>
     </div>
