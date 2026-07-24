@@ -37,7 +37,8 @@ export function TerminalCLI({ findings, onRefresh }: Props) {
     '', 'COMMANDS', '  audit               run all detectors',
     '  ls                  list findings', '  show <id>           finding summary + safety',
     '  apply <id>          apply the fix', '  verify <id>         re-measure after apply',
-    '  unapply <id>        revert the fix', '  open <id>           open detail page',
+    '  unapply <id>        revert the fix', '  explain <id>        auditor explains it (traced LLM call)',
+    '  open <id>           open detail page',
     '  evidence <id>       open SigNoz deep-link', '  health              backend status',
     '  clear', '',
   ]
@@ -87,6 +88,15 @@ export function TerminalCLI({ findings, onRefresh }: Props) {
           const res = await fn.call(api, f.id)
           print(`  ✓ ${cmd} ${f.id} → ${res.status}`, '')
           await onRefresh?.(); break
+        }
+        case 'explain': {
+          const f = find(arg); if (!f) { print(`  ✗ ${arg ?? ''} not found`, ''); break }
+          print('  asking the model (traced as spansaver-auditor)…')
+          const { explanation: ex } = await api.explainFinding(f.id)
+          print(`  ${ex.explanation}`,
+            `  model  ${ex.provider}/${ex.model}   tokens  ${ex.usage.input_tokens}↑/${ex.usage.output_tokens}↓   cost  $${ex.cost_usd.toFixed(4)} (${ex.rate_unit})`,
+            `  ${ex.traced}`, '')
+          break
         }
         case 'open': {
           const f = find(arg); if (!f) { print(`  ✗ ${arg ?? ''} not found`, ''); break }
