@@ -40,7 +40,7 @@ jobs:
           version: 11   # match the lockfile's generator (pnpm 10/11 ignore the legacy pnpm.overrides field)
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22        # pnpm 11 requires Node >= 22.13 (uses node:sqlite)
           cache: pnpm
           cache-dependency-path: ui/pnpm-lock.yaml
       - name: Install
