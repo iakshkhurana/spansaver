@@ -5,8 +5,16 @@
   Python 3.12, an LLM API key (Anthropic or OpenAI).
 
 ## 1. SigNoz (self-host)
-Install via the **official SigNoz self-host Docker guide** (signoz.io → Docs → Install).
-Don't pin ports/paths from memory — after install, note what your version actually exposes:
+Install via SigNoz's **Foundry** installer (the current official Docker self-host flow). The repo
+ships the manifest at `casting.yml`:
+```
+curl -fsSL https://signoz.io/foundry.sh | bash   # install foundryctl (once)
+foundryctl cast -f casting.yml                    # generates pours/deployment/ and brings it up
+# or: foundryctl forge -f casting.yml && cd pours/deployment && docker compose up -d
+```
+Docs: https://signoz.io/docs/install/docker/ · The generated `pours/` dir is gitignored (it's not
+part of our repo). Don't pin ports/paths from memory — after install, note what your version
+actually exposes:
 - `SIGNOZ_UI_URL` — the URL you open in the browser.
 - `SIGNOZ_API_URL` — same host; confirm the API base by watching a request in browser
   devtools while clicking around the SigNoz UI.

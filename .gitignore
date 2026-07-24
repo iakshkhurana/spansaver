@@ -3,6 +3,8 @@
 
 # SigNoz self-host clone (runs separately; not part of our repo)
 /signoz/
+# Foundry-generated SigNoz deployment (from `foundryctl cast/forge -f casting.yml`) — output, not source
+/pours/
 
 # generated collector config (built at container start by merge_config.py)
 collector/merged.yaml

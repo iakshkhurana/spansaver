@@ -1,0 +1,20 @@
+# SigNoz self-host install manifest — consumed by the Foundry CLI (foundryctl).
+# SigNoz runs SEPARATELY from our stack (see CLAUDE.md / docs/SETUP.md); this file is how we
+# stand it up reproducibly instead of "install from memory".
+#
+# Deploy:
+#   curl -fsSL https://signoz.io/foundry.sh | bash        # install foundryctl (once)
+#   foundryctl cast -f casting.yml                         # generates pours/deployment/ + brings it up
+# Or manage the generated compose yourself:
+#   foundryctl forge -f casting.yml && cd pours/deployment && docker compose up -d
+#
+# After it's up: UI/OTLP land on 8080 / 4317 / 4318 — confirm the real ports (don't assume) and set
+# SIGNOZ_UI_URL / SIGNOZ_API_URL / CLICKHOUSE_DSN in .env. Docs: https://signoz.io/docs/install/docker/
+apiVersion: v1alpha1
+kind: Installation
+metadata:
+  name: signoz
+spec:
+  deployment:
+    flavor: compose
+    mode: docker
