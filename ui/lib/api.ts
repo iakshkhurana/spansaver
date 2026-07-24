@@ -1,4 +1,4 @@
-import { Finding, AuditResponse, HealthResponse, ActionResponse } from './types'
+import { Finding, AuditResponse, HealthResponse, ActionResponse, ExplainResponse } from './types'
 
 // Points at the auditor FastAPI brain. Default matches AUDITOR_PORT in .env.example (8100).
 const API_BASE = process.env.NEXT_PUBLIC_AUDITOR_URL || 'http://localhost:8100'
@@ -165,6 +165,27 @@ class SpanSaverAPI {
   async unapplyFinding(id: string): Promise<ActionResponse> {
     if (USE_MOCK) { await wait(500); const f = mockStore.find((x) => x.id === id.toUpperCase()); if (f) { f.status = 'fix_ready'; f.verification = {} } return { status: 'unapplied' } }
     return req<ActionResponse>(`/unapply/${id}`, { method: 'POST' })
+  }
+
+  /** POST /explain/{id} — the auditor's OWN traced LLM call. Real usage + cost, gen_ai spans to
+   *  SigNoz. Mock returns a canned explanation so the UI is demoable without a key. */
+  async explainFinding(id: string): Promise<ExplainResponse> {
+    if (USE_MOCK) {
+      await wait(900)
+      const f = mockStore.find((x) => x.id === id.toUpperCase())
+      return {
+        id: id.toUpperCase(),
+        explanation: {
+          explanation:
+            `${id.toUpperCase()} is wasted spend: ${f?.summary ?? 'a detected leak'} The fix is safe because ${f?.safety?.proof ?? 'nothing referenced depends on the dropped data'} — so applying it stops the waste without breaking anything you rely on.`,
+          provider: 'anthropic', model: 'claude-opus-4-8',
+          usage: { input_tokens: 210, output_tokens: 96 },
+          cost_usd: 0.0021, rate_unit: '$/Mtok in|out (assumed)',
+          traced: "gen_ai spans emitted to SigNoz as service 'spansaver-auditor' (Agent Ops)",
+        },
+      }
+    }
+    return req<ExplainResponse>(`/explain/${id}`, { method: 'POST' })
   }
 
   async health(): Promise<HealthResponse> {

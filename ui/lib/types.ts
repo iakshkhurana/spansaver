@@ -69,6 +69,23 @@ export interface Finding {
   error: string
 }
 
+// /explain/{id} — the auditor's own traced LLM call (explainer.py). cost_usd is priced with the
+// same assumed $/Mtok rates as findings; the call emits gen_ai spans to SigNoz (spansaver-auditor).
+export interface Explanation {
+  explanation: string
+  provider: string
+  model: string
+  usage: { input_tokens: number; output_tokens: number }
+  cost_usd: number
+  rate_unit: string
+  traced: string
+}
+
+export interface ExplainResponse {
+  id: string
+  explanation: Explanation
+}
+
 export interface AuditResponse {
   count: number
   findings: Finding[]
