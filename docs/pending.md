@@ -21,6 +21,12 @@ Environment note: stack runs in **WSL** (`/mnt/k/hacks/signoz`); UI runs on host
 - **Integrity-story assets (§4) — files created, import still human.** `dashboards/telemetry-cost.json`
   (confirmed-column T1/T3/T4 panels) + `alerts/README.md` (3 alert-rule recipes). Importing the
   dashboards and creating the alerts in SigNoz is still a live/human step.
+- **L3 (retry storms) + L4 (model overkill) detectors — WRITTEN (recommend-only).** Additive,
+  confirmed columns/keys only, `run()` hardened so a bad detector can't sink the audit. **Not yet
+  run live** (no local ClickHouse; compiles + tier-logic unit-checked). Caveats to know on camera:
+  L3 fires only if the stack records gen_ai error spans; L4 returns nothing on the gpt-4o-mini demo
+  stack (mini isn't overkill — that's the honest result). Both are recommend-only: no Apply button,
+  the UI shows "suggested, not auto-applied".
 
 ---
 

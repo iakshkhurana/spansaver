@@ -191,7 +191,7 @@ the UI. Every other number is measured.
 | **T1–T3** | Telemetry: debug flood, orphan metrics, health-span spam | ✅ live (detect → apply → verify) |
 | **T4** | Telemetry: cardinality bomb — drop the offending label (OTTL `delete_key`), keep the metric | ✅ live (detect → apply → verify) |
 | **L1–L2** | LLM: cacheable duplicates, prompt bloat | ✅ live (detect → apply → verify) |
-| **L3–L4** | LLM: retry storms, model overkill (recommend-only) | 🗺️ catalogued |
+| **L3–L4** | LLM: retry storms, model overkill | ✅ detect + recommend-only (no auto-apply, by design) |
 | **Mission Control** | Report · leak detail · live status · command console · Judge Mode | ✅ live |
 | **Agent Ops dashboard** | LLM tokens/calls/prompt-size/duplicates in SigNoz | ✅ importable |
 | **Self-cost `/explain`** | auditor traces its own explainer LLM call into SigNoz (`spansaver-auditor`) | ✅ live endpoint |

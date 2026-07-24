@@ -137,6 +137,10 @@ Shared rules:
   earlier ones ending in error status.
 - **Fix:** recommendation card (exponential backoff + circuit breaker snippet). Recommend-only
   is acceptable here — say so honestly in the UI ("fix: suggested, not auto-applied").
+- **Status:** ✅ implemented — `detect_l3` (recommend-only). Trace-less clustering: `signoz_index_v3`
+  has no confirmed `trace_id` column, so we group by `(prompt_hash, 1-minute bucket)` and require
+  `has_error >= 1` in the bucket (that error condition separates a retry burst from L1 duplicates).
+  waste = tokens on the errored attempts. Returns nothing if the stack records no gen_ai errors.
 - **Cut priority:** 4.
 
 ### L4 · Model overkill
@@ -145,6 +149,12 @@ Shared rules:
   prompt matches simple-lookup patterns; compare cost vs the cheap-tier rate for the same
   volume.
 - **Fix:** routing suggestion with projected savings (recommend-only).
+- **Status:** ✅ implemented — `detect_l4` (recommend-only). Aggregates trivial calls
+  (input+output < `L4_TRIVIAL_TOKENS`, default 300) per model, keeps expensive-tier models only
+  (cheap markers like `mini`/`haiku`/`flash` always win, so `gpt-4o-mini` is never flagged), and
+  projects the saving of routing them to a cheap tier via an **assumed** fraction
+  (`L4_SAVINGS_FRACTION`, labeled). On a stack already on a cheap model it returns nothing — the
+  correct, honest "no overkill here" result.
 - **Cut priority:** 4.
 
 ---
