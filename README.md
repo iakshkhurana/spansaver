@@ -2,11 +2,12 @@
 
 <h1>SpanSaver&nbsp;🔎💸</h1>
 
-### Stop paying for telemetry and tokens nobody reads.
+### An autonomous agent that watches your AI + infra through SigNoz — and self-heals.
 
-SpanSaver is an **AI auditor for the two bills every engineering team overpays** —
-observability ingestion and LLM tokens. It finds the leaks, **proves** they're safe to fix,
-applies the fix, and **verifies** the savings against live SigNoz data.
+SpanSaver is an **AI-observability agent**: it traces your AI-native and infrastructure systems
+in SigNoz, detects where they leak money and tokens, **proves** a fix is safe, applies it, and
+**verifies** the result against live metrics — closing the loop. It even traces its own LLM
+calls into SigNoz, so it audits its own AI cost.
 
 <br/>
 
@@ -17,7 +18,7 @@ applies the fix, and **verifies** the savings against live SigNoz data.
 ![FastAPI](https://img.shields.io/badge/FastAPI-brain-009688?style=flat-square&logo=fastapi&logoColor=white)
 ![Status](https://img.shields.io/badge/telemetry_auditor-live-3fb950?style=flat-square)
 
-<em>Built for <strong>Agents of SigNoz</strong> — WeMakeDevs × SigNoz, July 2026 · Track 01</em>
+<em>Built for <strong>Agents of SigNoz</strong> — WeMakeDevs × SigNoz, July 2026 · AI &amp; Agent Observability</em>
 
 </div>
 
@@ -27,14 +28,17 @@ applies the fix, and **verifies** the savings against live SigNoz data.
 
 ## Why
 
-Every observability bill and every LLM bill carries the same quiet tax: **data nobody looks at.**
-Debug logs shipped from a hot path. Metrics someone added "temporarily" two quarters ago.
-Health-check spans that outnumber real traffic. The same FAQ prompt answered fresh a thousand
-times. It's invisible on the invoice — until someone measures it.
+AI-native systems are observable but not *accountable*. You can trace every `gen_ai` span in
+SigNoz — yet nobody watches which of those tokens were pure waste: the same FAQ prompt answered
+fresh a thousand times, a static preamble reshipped on every call, a retry storm. The same quiet
+tax runs through the infra underneath: debug logs from a hot path, metrics someone added
+"temporarily" two quarters ago, health-check spans outnumbering real traffic. It's invisible on
+the invoice — until an agent measures it.
 
-SpanSaver measures it, and — crucially — **proves a fix is safe before touching anything.** A
-drop is only offered when *zero* dashboards and *zero* alerts depend on the data. That safety
-proof, and the after-the-fact verification, are the product. Not the detection.
+SpanSaver is that agent. It observes both layers through SigNoz, and — crucially — **proves a fix
+is safe before touching anything.** A change is only offered when *zero* dashboards and *zero*
+alerts depend on the data. That safety proof, the self-healing apply, and the after-the-fact
+verification are the product. Not the detection.
 
 ---
 
@@ -50,8 +54,10 @@ proof, and the after-the-fact verification, are the product. Not the detection.
   baseline; always reversible.
 - ✅ **Verify or it didn't happen** — before/after volume plus an integrity sweep confirming
   nothing you rely on broke.
-- 🤖 **Self-disclosing** — SpanSaver's own LLM calls are traced into SigNoz; the Agent Ops
-  dashboard shows what each audit cost.
+- 🤖 **Audits its own AI cost** — `POST /explain/<id>` makes a real, Traceloop-traced LLM call;
+  its `gen_ai` spans land in SigNoz as service `spansaver-auditor` (visible on the Agent Ops
+  dashboard) and the returned `cost_usd` is priced with the same assumed $/Mtok rates. A cost
+  auditor that discloses its own cost.
 
 ---
 
@@ -108,7 +114,9 @@ make verify  F=L1    # re-measures gen_ai calls/tokens + cacheable repeats -> ~0
 
 **Mission Control (Next.js) — refined black-console UI.** Run an audit, inspect any leak's money
 math, safety proof, fix diff, and SigNoz evidence deep-link, then apply → verify → unapply — from
-the report page, or from the working front terminal. `make ui` (config in `ui/.env.example`).
+the report page, or from the working front terminal. Each leak page also has **Explain with AI**
+(and `explain <id>` in the console): the auditor calls an LLM to explain the finding and discloses
+what that call cost. `make ui` (config in `ui/.env.example`).
 
 **Agent Ops dashboard** — `dashboards/agent-ops.json`: LLM tokens/calls, prompt-size p50/p95,
 cache reads, and cacheable duplicates, all from real gen_ai spans. Import via the SigNoz UI
@@ -186,6 +194,7 @@ the UI. Every other number is measured.
 | **L3–L4** | LLM: retry storms, model overkill (recommend-only) | 🗺️ catalogued |
 | **Mission Control** | Report · leak detail · live status · command console · Judge Mode | ✅ live |
 | **Agent Ops dashboard** | LLM tokens/calls/prompt-size/duplicates in SigNoz | ✅ importable |
+| **Self-cost `/explain`** | auditor traces its own explainer LLM call into SigNoz (`spansaver-auditor`) | ✅ live endpoint |
 
 See **[docs/LEAK-CATALOG.md](docs/LEAK-CATALOG.md)** for the full spec.
 
